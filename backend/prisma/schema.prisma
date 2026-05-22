@@ -68,6 +68,7 @@ model Ingredient {
   stock       Float        @default(0)
   minStock    Float        @default(0)
   unitCost    Int          @default(0)
+  active      Boolean      @default(true)
   recipes     RecipeItem[]
   stockMoves  StockMove[]
   createdAt   DateTime     @default(now())

@@ -11,6 +11,7 @@ import {
   History,
   ImagePlus,
   LogOut,
+  Menu,
   Minus,
   Package,
   Plus,
@@ -593,16 +594,17 @@ function DashboardShell({ user, onLogout, onUserChange }) {
   const canManage = ['OWNER', 'ADMIN'].includes(user.role);
   const [tab, setTab]           = useState(canManage ? 'overview' : 'orders');
   const [refreshToken, setRefresh] = useState(0);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const navItems = [
-    { id: 'overview',     label: 'Doanh thu',     icon: <BarChart3 size={18} />,    hidden: !canManage },
-    { id: 'orders',       label: 'Đang làm',       icon: <ClipboardList size={18} /> },
-    { id: 'delivery',     label: 'Chờ giao',       icon: <ReceiptText size={18} /> },
-    { id: 'history',      label: 'Lịch sử',        icon: <History size={18} /> },
-    { id: 'menu',         label: 'Menu',            icon: <Utensils size={18} />,     hidden: !canManage },
-    { id: 'ingredients',  label: 'Nguyên liệu',    icon: <Package size={18} />,      hidden: !canManage },
-    { id: 'tables',       label: 'Bàn & QR',       icon: <QrCode size={18} />,       hidden: !canManage },
-    { id: 'accounts',     label: 'Tài khoản',      icon: <Users size={18} />,        hidden: !canManage },
+    { id: 'overview',     label: 'Doanh thu',   mobileLabel: 'Doanh thu', icon: <BarChart3 size={18} />,    hidden: !canManage },
+    { id: 'orders',       label: 'Đang làm',    mobileLabel: 'Đang làm',  icon: <ClipboardList size={18} /> },
+    { id: 'delivery',     label: 'Chờ giao',    mobileLabel: 'Giao',      icon: <ReceiptText size={18} /> },
+    { id: 'history',      label: 'Lịch sử',     mobileLabel: 'Lịch sử',   icon: <History size={18} /> },
+    { id: 'menu',         label: 'Menu',        mobileLabel: 'Menu',      icon: <Utensils size={18} />,     hidden: !canManage },
+    { id: 'ingredients',  label: 'Nguyên liệu', mobileLabel: 'Nguyên liệu', icon: <Package size={18} />,  hidden: !canManage },
+    { id: 'tables',       label: 'Bàn & QR',    mobileLabel: 'Bàn & QR',  icon: <QrCode size={18} />,       hidden: !canManage },
+    { id: 'accounts',     label: 'Tài khoản',   mobileLabel: 'Tài khoản', icon: <Users size={18} />,        hidden: !canManage },
   ].filter((n) => !n.hidden);
 
   return (
@@ -615,15 +617,23 @@ function DashboardShell({ user, onLogout, onUserChange }) {
         </div>
         <nav className="sidebar-nav">
           {navItems.map((n) => (
-            <button key={n.id} className={`nav-item ${tab === n.id ? 'active' : ''}`} onClick={() => setTab(n.id)}>
+            <button
+              key={n.id}
+              className={`nav-item ${tab === n.id ? 'active' : ''}`}
+              onClick={() => {
+                setTab(n.id);
+                setMobileNavOpen(false);
+              }}
+            >
               {n.icon}
-              <span>{n.label}</span>
+              <span className="nav-label nav-label-desktop">{n.label}</span>
+              <span className="nav-label nav-label-mobile">{n.mobileLabel ?? n.label}</span>
             </button>
           ))}
         </nav>
         <div className="sidebar-footer">
           <button className="nav-item" onClick={onLogout} style={{ width: '100%' }}>
-            <LogOut size={18} /><span>Đăng xuất</span>
+            <LogOut size={18} /><span className="nav-label nav-label-desktop">Đăng xuất</span><span className="nav-label nav-label-mobile">Thoát</span>
           </button>
         </div>
       </aside>
@@ -635,9 +645,14 @@ function DashboardShell({ user, onLogout, onUserChange }) {
             <p>{user.role}</p>
             <h1>{user.name}</h1>
           </div>
-          <button className="btn btn-ghost" onClick={() => setRefresh((v) => v + 1)}>
-            <RefreshCw size={15} /> Làm mới
-          </button>
+          <div className="topbar-actions">
+            <button className="btn btn-ghost topbar-menu-btn" onClick={() => setMobileNavOpen(true)}>
+              <Menu size={15} /> Menu
+            </button>
+            <button className="btn btn-ghost" onClick={() => setRefresh((v) => v + 1)}>
+              <RefreshCw size={15} /> Làm mới
+            </button>
+          </div>
         </header>
         <div className="workspace-body">
           {tab === 'overview'    && <Overview refreshToken={refreshToken} />}
@@ -648,6 +663,43 @@ function DashboardShell({ user, onLogout, onUserChange }) {
           {tab === 'ingredients' && <IngredientManager refreshToken={refreshToken} />}
           {tab === 'tables'      && <TableManager refreshToken={refreshToken} />}
           {tab === 'accounts'    && <AccountManager currentUser={user} onCurrentUserChange={onUserChange} refreshToken={refreshToken} onLogout={onLogout} />}
+        </div>
+      </div>
+
+      <div className={`mobile-nav-drawer ${mobileNavOpen ? 'open' : ''}`} aria-hidden={!mobileNavOpen}>
+        <button className="mobile-nav-backdrop" type="button" onClick={() => setMobileNavOpen(false)} aria-label="Đóng menu" />
+        <div className="mobile-nav-panel" role="dialog" aria-label="Điều hướng quản trị">
+          <div className="mobile-nav-head">
+            <div>
+              <p>Điều hướng</p>
+              <h2>Chọn chức năng</h2>
+            </div>
+            <button className="btn btn-ghost" type="button" onClick={() => setMobileNavOpen(false)}>
+              Đóng
+            </button>
+          </div>
+          <nav className="mobile-nav-list">
+            {navItems.map((n) => (
+              <button
+                key={n.id}
+                className={`mobile-nav-item ${tab === n.id ? 'active' : ''}`}
+                onClick={() => {
+                  setTab(n.id);
+                  setMobileNavOpen(false);
+                }}
+              >
+                <span className="mobile-nav-icon">{n.icon}</span>
+                <span className="mobile-nav-text">
+                  <b>{n.label}</b>
+                  <small>{n.id === 'overview' ? 'Xem doanh thu' : n.id === 'orders' ? 'Đơn đang xử lý' : n.id === 'delivery' ? 'Đơn chờ giao' : n.id === 'history' ? 'Đơn đã xong' : n.id === 'menu' ? 'Quản lý món ăn' : n.id === 'ingredients' ? 'Quản lý nguyên liệu' : n.id === 'tables' ? 'Quản lý bàn và QR' : 'Quản lý tài khoản'}</small>
+                </span>
+                <ChevronRight size={16} />
+              </button>
+            ))}
+          </nav>
+          <button className="mobile-nav-logout" type="button" onClick={onLogout}>
+            <LogOut size={18} /> Đăng xuất
+          </button>
         </div>
       </div>
     </div>
@@ -663,7 +715,7 @@ function Overview({ refreshToken }) {
   if (!data) return <p className="muted">Đang tải...</p>;
 
   return (
-    <div>
+    <div className="overview-panel">
       <div className="metrics-grid">
         <div className="metric-card">
           <div className="label">Doanh thu</div>
@@ -682,7 +734,7 @@ function Overview({ refreshToken }) {
           <div className="value">{data.orderCount}</div>
         </div>
       </div>
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 18, boxShadow: 'var(--shadow-s)' }}>
+      <div className="overview-feed">
         <div className="section-head"><h2>Đơn gần đây</h2></div>
         {data.recentOrders.map((order) => <OrderRowCompact key={order.id} order={order} />)}
       </div>
@@ -692,10 +744,10 @@ function Overview({ refreshToken }) {
 
 function OrderRowCompact({ order }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
-      <b style={{ fontFamily: 'var(--font-display)', minWidth: 80 }}>#{order.dailySequence}</b>
-      <span style={{ flex: 1, color: 'var(--ink-3)', fontSize: 14 }}>{order.table?.name}</span>
-      <span style={{ fontWeight: 700, color: 'var(--green)' }}>{money(order.subtotal)}</span>
+    <div className="order-row-compact">
+      <b>#{order.dailySequence}</b>
+      <span className="order-table-name">{order.table?.name}</span>
+      <span className="order-amount">{money(order.subtotal)}</span>
       <StatusBadge text={order.status} />
       <StatusBadge text={order.paymentStatus} />
     </div>
@@ -821,6 +873,8 @@ function OrderHistory({ user, refreshToken }) {
 function MenuManager({ refreshToken }) {
   const [items, setItems] = useState([]);
   const [form, setForm]   = useState({ name: '', price: 0, description: '', imageUrl: '' });
+  const [editingId, setEditingId] = useState(null);
+  const [editingForm, setEditingForm] = useState(null);
   const load = () => api('/api/admin/menu-items').then(setItems);
   useEffect(() => { load(); }, [refreshToken]);
   useRealtimeUpdates(['menu'], load);
@@ -837,6 +891,42 @@ function MenuManager({ refreshToken }) {
     e.preventDefault();
     await api('/api/admin/menu-items', { method: 'POST', body: JSON.stringify({ ...form, price: Number(form.price) }) });
     setForm({ name: '', price: 0, description: '', imageUrl: '' });
+    load();
+  }
+
+  function startEdit(item) {
+    setEditingId(item.id);
+    setEditingForm({
+      name: item.name,
+      price: item.price,
+      description: item.description || '',
+      imageUrl: item.imageUrl || '',
+      active: item.active !== false,
+      categoryId: item.categoryId || ''
+    });
+  }
+
+  async function saveEdit(itemId) {
+    await api(`/api/admin/menu-items/${itemId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        ...editingForm,
+        price: Number(editingForm.price),
+        categoryId: editingForm.categoryId || null
+      })
+    });
+    setEditingId(null);
+    setEditingForm(null);
+    load();
+  }
+
+  async function removeItem(itemId) {
+    if (!window.confirm('Ẩn món này khỏi menu?')) return;
+    await api(`/api/admin/menu-items/${itemId}`, { method: 'DELETE' });
+    if (editingId === itemId) {
+      setEditingId(null);
+      setEditingForm(null);
+    }
     load();
   }
 
@@ -857,9 +947,32 @@ function MenuManager({ refreshToken }) {
       </form>
       <div className="menu-grid">
         {items.map((item) => (
-          <div className="menu-admin-card" key={item.id}>
+          <div className={`menu-admin-card ${item.active === false ? 'is-muted' : ''}`} key={item.id}>
             <img src={item.imageUrl || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=300&q=60'} alt={item.name} />
-            <div className="info"><b>{item.name}</b><span className="price">{money(item.price)}</span></div>
+            {editingId === item.id && editingForm ? (
+              <div className="card-edit-panel">
+                <input className="field" value={editingForm.name} onChange={(e) => setEditingForm({ ...editingForm, name: e.target.value })} placeholder="Tên món" />
+                <input className="field" value={editingForm.price} onChange={(e) => setEditingForm({ ...editingForm, price: e.target.value })} placeholder="Giá bán" type="number" />
+                <textarea className="field" value={editingForm.description} onChange={(e) => setEditingForm({ ...editingForm, description: e.target.value })} placeholder="Mô tả" />
+                <input className="field" value={editingForm.imageUrl} onChange={(e) => setEditingForm({ ...editingForm, imageUrl: e.target.value })} placeholder="URL ảnh" />
+                <div className="admin-card-actions">
+                  <button className="btn btn-primary" type="button" onClick={() => saveEdit(item.id)}><Check size={14} /> Lưu</button>
+                  <button className="btn btn-ghost" type="button" onClick={() => { setEditingId(null); setEditingForm(null); }}>Hủy</button>
+                </div>
+              </div>
+            ) : (
+              <div className="menu-admin-body">
+                <div className="info">
+                  <b>{item.name}</b>
+                  <span className="price">{money(item.price)}</span>
+                </div>
+                <p className="muted menu-admin-desc">{item.description || 'Không có mô tả'}</p>
+                <div className="admin-card-actions">
+                  <button className="btn btn-ghost" type="button" onClick={() => startEdit(item)}><Utensils size={14} /> Sửa</button>
+                  <button className="btn btn-danger" type="button" onClick={() => removeItem(item.id)}><Trash2 size={14} /> Xóa</button>
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -871,6 +984,8 @@ function MenuManager({ refreshToken }) {
 function IngredientManager({ refreshToken }) {
   const [items, setItems] = useState([]);
   const [form, setForm]   = useState({ name: '', unit: 'g', stock: 0, minStock: 0, unitCost: 0 });
+  const [editingId, setEditingId] = useState(null);
+  const [editingForm, setEditingForm] = useState(null);
   const load = () => api('/api/admin/ingredients').then(setItems);
   useEffect(() => { load(); }, [refreshToken]);
   useRealtimeUpdates(['ingredients'], load);
@@ -879,6 +994,43 @@ function IngredientManager({ refreshToken }) {
     e.preventDefault();
     await api('/api/admin/ingredients', { method: 'POST', body: JSON.stringify({ ...form, stock: Number(form.stock), minStock: Number(form.minStock), unitCost: Number(form.unitCost) }) });
     setForm({ name: '', unit: 'g', stock: 0, minStock: 0, unitCost: 0 });
+    load();
+  }
+
+  function startEdit(item) {
+    setEditingId(item.id);
+    setEditingForm({
+      name: item.name,
+      unit: item.unit,
+      stock: item.stock,
+      minStock: item.minStock,
+      unitCost: item.unitCost,
+      active: item.active !== false
+    });
+  }
+
+  async function saveEdit(itemId) {
+    await api(`/api/admin/ingredients/${itemId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        ...editingForm,
+        stock: Number(editingForm.stock),
+        minStock: Number(editingForm.minStock),
+        unitCost: Number(editingForm.unitCost)
+      })
+    });
+    setEditingId(null);
+    setEditingForm(null);
+    load();
+  }
+
+  async function removeItem(itemId) {
+    if (!window.confirm('Ẩn nguyên liệu này?')) return;
+    await api(`/api/admin/ingredients/${itemId}`, { method: 'DELETE' });
+    if (editingId === itemId) {
+      setEditingId(null);
+      setEditingForm(null);
+    }
     load();
   }
 
@@ -893,9 +1045,33 @@ function IngredientManager({ refreshToken }) {
       </form>
       <div className="ingredient-list">
         {items.map((item) => (
-          <div className="ingredient-row" key={item.id}>
-            <b>{item.name}</b>
-            <span className="meta">{item.stock} {item.unit} · Tối thiểu: {item.minStock} · {money(item.unitCost)}/{item.unit}</span>
+          <div className={`ingredient-row ${item.active === false ? 'is-muted' : ''}`} key={item.id}>
+            {editingId === item.id && editingForm ? (
+              <div className="card-edit-panel full-width">
+                <div className="inline-form compact-form">
+                  <input className="field" value={editingForm.name} onChange={(e) => setEditingForm({ ...editingForm, name: e.target.value })} placeholder="Tên" />
+                  <input className="field" value={editingForm.unit} onChange={(e) => setEditingForm({ ...editingForm, unit: e.target.value })} placeholder="Đơn vị" />
+                  <input className="field" value={editingForm.stock} onChange={(e) => setEditingForm({ ...editingForm, stock: e.target.value })} placeholder="Tồn kho" type="number" />
+                  <input className="field" value={editingForm.minStock} onChange={(e) => setEditingForm({ ...editingForm, minStock: e.target.value })} placeholder="Tối thiểu" type="number" />
+                  <input className="field" value={editingForm.unitCost} onChange={(e) => setEditingForm({ ...editingForm, unitCost: e.target.value })} placeholder="Giá vốn" type="number" />
+                </div>
+                <div className="admin-card-actions">
+                  <button className="btn btn-primary" type="button" onClick={() => saveEdit(item.id)}><Check size={14} /> Lưu</button>
+                  <button className="btn btn-ghost" type="button" onClick={() => { setEditingId(null); setEditingForm(null); }}>Hủy</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <b>{item.name}</b>
+                  <div className="meta">{item.stock} {item.unit} · Tối thiểu: {item.minStock} · {money(item.unitCost)}/{item.unit}</div>
+                </div>
+                <div className="admin-card-actions">
+                  <button className="btn btn-ghost" type="button" onClick={() => startEdit(item)}><Package size={14} /> Sửa</button>
+                  <button className="btn btn-danger" type="button" onClick={() => removeItem(item.id)}><Trash2 size={14} /> Xóa</button>
+                </div>
+              </>
+            )}
           </div>
         ))}
       </div>
@@ -907,6 +1083,8 @@ function IngredientManager({ refreshToken }) {
 function TableManager({ refreshToken }) {
   const [items, setItems] = useState([]);
   const [form, setForm]   = useState({ name: '', qrCode: '', seats: 4 });
+  const [editingId, setEditingId] = useState(null);
+  const [editingForm, setEditingForm] = useState(null);
   const load = () => api('/api/admin/tables').then(setItems);
   useEffect(() => { load(); }, [refreshToken]);
   useRealtimeUpdates(['tables'], load);
@@ -915,6 +1093,39 @@ function TableManager({ refreshToken }) {
     e.preventDefault();
     await api('/api/admin/tables', { method: 'POST', body: JSON.stringify({ ...form, qrCode: form.qrCode.trim() || undefined, seats: Number(form.seats) }) });
     setForm({ name: '', qrCode: '', seats: 4 });
+    load();
+  }
+
+  function startEdit(item) {
+    setEditingId(item.id);
+    setEditingForm({
+      name: item.name,
+      qrCode: item.qrCode,
+      seats: item.seats,
+      active: item.active !== false
+    });
+  }
+
+  async function saveEdit(itemId) {
+    await api(`/api/admin/tables/${itemId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        ...editingForm,
+        seats: Number(editingForm.seats)
+      })
+    });
+    setEditingId(null);
+    setEditingForm(null);
+    load();
+  }
+
+  async function removeItem(itemId) {
+    if (!window.confirm('Ẩn bàn này?')) return;
+    await api(`/api/admin/tables/${itemId}`, { method: 'DELETE' });
+    if (editingId === itemId) {
+      setEditingId(null);
+      setEditingForm(null);
+    }
     load();
   }
 
@@ -929,16 +1140,32 @@ function TableManager({ refreshToken }) {
       </form>
       <div className="qr-grid">
         {items.map((item) => (
-          <div className="qr-card" key={item.id}>
+          <div className={`qr-card ${item.active === false ? 'is-muted' : ''}`} key={item.id}>
             <img src={item.qrDataUrl} alt={`QR ${item.name}`} />
             <div className="qr-card-body">
-              <h3>{item.name}</h3>
-              <p className="code">{item.qrCode}</p>
-              <a className="url" href={item.orderUrl} target="_blank" rel="noreferrer">{item.orderUrl}</a>
-              <div className="actions">
-                <a className="btn btn-ghost" href={item.orderUrl} target="_blank" rel="noreferrer" style={{ fontSize: 13 }}><ExternalLink size={13} /> Mở</a>
-                <a className="btn btn-ghost" href={item.qrDataUrl} download={`${item.qrCode}.png`} style={{ fontSize: 13 }}><Download size={13} /> QR</a>
-              </div>
+              {editingId === item.id && editingForm ? (
+                <>
+                  <input className="field" value={editingForm.name} onChange={(e) => setEditingForm({ ...editingForm, name: e.target.value })} placeholder="Tên bàn" />
+                  <input className="field" value={editingForm.qrCode} onChange={(e) => setEditingForm({ ...editingForm, qrCode: e.target.value })} placeholder="Mã QR" />
+                  <input className="field" value={editingForm.seats} onChange={(e) => setEditingForm({ ...editingForm, seats: e.target.value })} placeholder="Số ghế" type="number" />
+                  <div className="admin-card-actions">
+                    <button className="btn btn-primary" type="button" onClick={() => saveEdit(item.id)}><Check size={14} /> Lưu</button>
+                    <button className="btn btn-ghost" type="button" onClick={() => { setEditingId(null); setEditingForm(null); }}>Hủy</button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h3>{item.name}</h3>
+                  <p className="code">{item.qrCode}</p>
+                  <a className="url" href={item.orderUrl} target="_blank" rel="noreferrer">{item.orderUrl}</a>
+                  <div className="actions">
+                    <a className="btn btn-ghost" href={item.orderUrl} target="_blank" rel="noreferrer" style={{ fontSize: 13 }}><ExternalLink size={13} /> Mở</a>
+                    <a className="btn btn-ghost" href={item.qrDataUrl} download={`${item.qrCode}.png`} style={{ fontSize: 13 }}><Download size={13} /> QR</a>
+                    <button className="btn btn-ghost" type="button" style={{ fontSize: 13 }} onClick={() => startEdit(item)}><QrCode size={13} /> Sửa</button>
+                    <button className="btn btn-danger" type="button" style={{ fontSize: 13 }} onClick={() => removeItem(item.id)}><Trash2 size={13} /> Xóa</button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         ))}

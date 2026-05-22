@@ -48,19 +48,26 @@ export async function createSepayLink(order) {
 }
 
 function extractReferenceCodeFromWebhook(body) {
-  const pattern = /SP\d{11}/;
-  const candidates = [body.code, body.referenceCode, body.content, body.description]
+  const candidates = [body.referenceCode, body.code, body.content, body.description]
     .filter(Boolean)
-    .map((value) => String(value));
+    .map((value) => String(value).trim());
+
+  const patterns = [
+    /\bSP[0-9A-Z]{8,32}\b/i,
+    /\bDH[0-9A-Z_-]{3,64}\b/i
+  ];
 
   for (const candidate of candidates) {
-    const match = candidate.match(pattern);
-    if (match) {
-      return match[0];
+    for (const pattern of patterns) {
+      const match = candidate.match(pattern);
+      if (match) {
+        return match[0].toUpperCase();
+      }
     }
   }
 
-  return candidates[0] || '';
+  const directReference = candidates[0] || '';
+  return directReference.toUpperCase();
 }
 
 export function verifySepayWebhook(body, headers = {}) {
@@ -77,11 +84,13 @@ export function verifySepayWebhook(body, headers = {}) {
     }
   }
 
+  const directReferenceCode = String(body.referenceCode || body.code || '').trim();
   const transferType = String(body.transferType || body.type || body.status || '').toLowerCase();
+  const referenceCode = directReferenceCode || extractReferenceCodeFromWebhook(body).trim();
 
   return {
-    transactionId: String(body.id || body.referenceCode || body.code || '').trim(),
-    referenceCode: extractReferenceCodeFromWebhook(body).trim(),
+    transactionId: String(body.id || body.transactionId || body.referenceCode || body.code || '').trim(),
+    referenceCode,
     amount: Number(body.transferAmount || body.amount || 0),
     success: transferType === 'in' || transferType === 'success' || transferType === 'paid',
     raw: body

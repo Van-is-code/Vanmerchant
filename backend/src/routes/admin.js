@@ -111,6 +111,20 @@ router.put('/menu-items/:id', async (req, res, next) => {
   }
 });
 
+router.delete('/menu-items/:id', async (req, res, next) => {
+  try {
+    const item = await prisma.menuItem.update({
+      where: { id: req.params.id },
+      data: { active: false }
+    });
+    broadcastDataChange('menu', { action: 'deleted', id: item.id });
+    broadcastDataChange('dashboard', { action: 'updated', source: 'menu' });
+    return res.status(204).send();
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/ingredients', async (req, res, next) => {
   try {
     const items = await prisma.ingredient.findMany({ orderBy: { name: 'asc' } });
@@ -149,6 +163,20 @@ router.put('/ingredients/:id', async (req, res, next) => {
     broadcastDataChange('ingredients', { action: 'updated', id: item.id });
     broadcastDataChange('dashboard', { action: 'updated', source: 'ingredients' });
     return res.json(item);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.delete('/ingredients/:id', async (req, res, next) => {
+  try {
+    const item = await prisma.ingredient.update({
+      where: { id: req.params.id },
+      data: { active: false }
+    });
+    broadcastDataChange('ingredients', { action: 'deleted', id: item.id });
+    broadcastDataChange('dashboard', { action: 'updated', source: 'ingredients' });
+    return res.status(204).send();
   } catch (error) {
     return next(error);
   }
@@ -196,6 +224,20 @@ router.put('/tables/:id', async (req, res, next) => {
     broadcastDataChange('tables', { action: 'updated', id: table.id });
     broadcastDataChange('dashboard', { action: 'updated', source: 'tables' });
     return res.json(table);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.delete('/tables/:id', async (req, res, next) => {
+  try {
+    const table = await prisma.diningTable.update({
+      where: { id: req.params.id },
+      data: { active: false }
+    });
+    broadcastDataChange('tables', { action: 'deleted', id: table.id });
+    broadcastDataChange('dashboard', { action: 'updated', source: 'tables' });
+    return res.status(204).send();
   } catch (error) {
     return next(error);
   }
