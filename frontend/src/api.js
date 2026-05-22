@@ -1,4 +1,4 @@
-export const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:2026';
+export const API_BASE = import.meta.env.VITE_API_BASE || 'https://vanmerchantapi.uyentoan.studio';
 
 export function getToken() {
   return localStorage.getItem('vanmerchant_token');
