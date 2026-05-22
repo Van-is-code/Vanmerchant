@@ -49,6 +49,12 @@ router.post('/sepay', async (req, res, next) => {
         });
 
         await printKitchenTicket(paid);
+        broadcastDataChange('payment-intents', {
+          action: 'paid',
+          intentId: intent.id,
+          orderId: paid.id,
+          referenceCode: intent.referenceCode
+        });
         broadcastDataChange('orders', { action: 'paid', orderId: paid.id });
         broadcastDataChange('dashboard', { action: 'updated', source: 'webhook' });
       } else {
@@ -58,6 +64,11 @@ router.post('/sepay', async (req, res, next) => {
             status: 'FAILED',
             sepayTransactionId: data.transactionId
           }
+        });
+        broadcastDataChange('payment-intents', {
+          action: 'failed',
+          intentId: intent.id,
+          referenceCode: intent.referenceCode
         });
       }
 
