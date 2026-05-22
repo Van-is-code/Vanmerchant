@@ -188,12 +188,20 @@ router.get('/payment-intents/:id', async (req, res, next) => {
       return res.status(404).json({ message: 'Không tìm thấy yêu cầu thanh toán' });
     }
 
+    const order = intent.order || (intent.orderId
+      ? await prisma.order.findUnique({
+          where: { id: intent.orderId },
+          include: { table: true, customer: true, items: true }
+        })
+      : null);
+
     return res.json({
       intent: {
         ...intent,
         qrDataUrl: intent.sepayCheckoutUrl
       },
-      order: intent.order,
+      order,
+      orderId: intent.orderId,
       qrDataUrl: intent.sepayCheckoutUrl,
       checkoutUrl: intent.sepayCheckoutUrl
     });

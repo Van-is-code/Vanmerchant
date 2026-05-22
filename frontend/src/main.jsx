@@ -109,14 +109,20 @@ function CustomerOrder({ qrCode }) {
 
         setTransferIntent((current) => ({ ...current, ...result.intent }));
 
-        if (result.intent.status === 'PAID' && result.order) {
+        if (result.intent.status === 'PAID') {
+          const latestOrders = await loadHistory();
+          const paidOrder = result.order || latestOrders.find((order) => order.paymentStatus === 'PAID');
+
+          if (!paidOrder) {
+            return;
+          }
+
           setTransferIntent(null);
           setDraftOrder(null);
           setCart({});
           setNote('');
-          setSuccessPopup({ kind: 'transfer', order: result.order });
+          setSuccessPopup({ kind: 'transfer', order: paidOrder });
           setMessage('Thanh toán chuyển khoản đã thành công.');
-          await loadHistory();
         }
 
         if (result.intent.status === 'FAILED' || result.intent.status === 'CANCELLED') {
@@ -142,9 +148,14 @@ function CustomerOrder({ qrCode }) {
 
   const loadHistory = () => {
     if (authorized && phone.length >= 8) {
-      return api(`/api/public/customers/${phone}/orders`).then(setHistory).catch(() => {});
+      return api(`/api/public/customers/${phone}/orders`)
+        .then((orders) => {
+          setHistory(orders);
+          return orders;
+        })
+        .catch(() => []);
     }
-    return Promise.resolve();
+    return Promise.resolve([]);
   };
 
   useEffect(() => {
