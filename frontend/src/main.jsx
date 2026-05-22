@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import {
   BarChart3,
   Check,
+  Banknote,
   ChefHat,
   ClipboardList,
   Download,
