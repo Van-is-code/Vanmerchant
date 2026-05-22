@@ -1,0 +1,19 @@
+{
+  "name": "vanmerchant",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace backend\" \"npm run dev --workspace frontend\"",
+    "install:all": "npm install --workspaces",
+    "db:push": "npm run db:push --workspace backend",
+    "db:seed": "npm run db:seed --workspace backend"
+  },
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

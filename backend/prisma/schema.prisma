@@ -1,0 +1,137 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("STAFF")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  phone     String   @unique
+  name      String?
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DiningTable {
+  id        String   @id @default(cuid())
+  name      String
+  qrCode    String   @unique
+  seats     Int      @default(4)
+  active    Boolean  @default(true)
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Category {
+  id        String     @id @default(cuid())
+  name      String
+  sortOrder Int        @default(0)
+  items     MenuItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model MenuItem {
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  price       Int
+  imageUrl    String?
+  active      Boolean      @default(true)
+  categoryId  String?
+  category    Category?    @relation(fields: [categoryId], references: [id])
+  recipes     RecipeItem[]
+  orderItems  OrderItem[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Ingredient {
+  id          String       @id @default(cuid())
+  name        String
+  unit        String
+  stock       Float        @default(0)
+  minStock    Float        @default(0)
+  unitCost    Int          @default(0)
+  recipes     RecipeItem[]
+  stockMoves  StockMove[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model RecipeItem {
+  id           String     @id @default(cuid())
+  menuItemId   String
+  ingredientId String
+  quantity     Float
+  menuItem     MenuItem   @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  @@unique([menuItemId, ingredientId])
+}
+
+model StockMove {
+  id           String     @id @default(cuid())
+  ingredientId String
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id])
+  quantity     Float
+  reason       String
+  orderId      String?
+  createdAt    DateTime   @default(now())
+}
+
+model Order {
+  id                String        @id @default(cuid())
+  dailySequence     Int
+  businessDate      String
+  tableId           String
+  table             DiningTable   @relation(fields: [tableId], references: [id])
+  customerId        String
+  customer          Customer      @relation(fields: [customerId], references: [id])
+  paymentMethod     String
+  paymentStatus     String   @default("UNPAID")
+  status            String   @default("NEW")
+  subtotal          Int
+  costTotal         Int           @default(0)
+  note              String?
+  payosOrderCode    Int?          @unique
+  payosCheckoutUrl  String?
+  sepayReferenceCode String?      @unique
+  sepayCheckoutUrl   String?
+  sepayTransactionId String?      @unique
+  paidAt            DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  items             OrderItem[]
+
+  @@unique([businessDate, dailySequence])
+  @@index([businessDate])
+  @@index([paymentStatus, status])
+}
+
+model OrderItem {
+  id         String   @id @default(cuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  name       String
+  quantity   Int
+  price      Int
+  cost       Int      @default(0)
+}

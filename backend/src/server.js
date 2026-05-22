@@ -1,0 +1,43 @@
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import { ZodError } from 'zod';
+import { config } from './config.js';
+import authRoutes from './routes/auth.js';
+import publicRoutes from './routes/public.js';
+import webhookRoutes from './routes/webhooks.js';
+import adminRoutes from './routes/admin.js';
+import userRoutes from './routes/users.js';
+import orderRoutes from './routes/orders.js';
+import { requireAuth } from './middleware/auth.js';
+import { sseHandler } from './services/realtime.js';
+
+const app = express();
+
+app.use(helmet());
+app.use(cors({ origin: config.frontendUrl, credentials: true }));
+app.use(express.json({ limit: '1mb' }));
+app.use(morgan('dev'));
+
+app.get('/health', (req, res) => res.json({ ok: true, name: config.storeName }));
+app.get('/api/events', sseHandler);
+app.use('/api/auth', authRoutes);
+app.use('/api/public', publicRoutes);
+app.use('/api/webhooks', webhookRoutes);
+app.use('/api/admin', requireAuth, adminRoutes);
+app.use('/api/admin/users', requireAuth, userRoutes);
+app.use('/api/orders', requireAuth, orderRoutes);
+
+app.use((error, req, res, next) => {
+  if (error instanceof ZodError) {
+    return res.status(400).json({ message: 'Dữ liệu không hợp lệ', issues: error.issues });
+  }
+
+  console.error(error);
+  return res.status(500).json({ message: error.message || 'Server error' });
+});
+
+app.listen(config.port, () => {
+  console.log(`VanMerchant API listening on http://localhost:${config.port}`);
+});
