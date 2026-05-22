@@ -114,6 +114,7 @@ model Order {
   sepayReferenceCode String?      @unique
   sepayCheckoutUrl   String?
   sepayTransactionId String?      @unique
+  paymentIntent      PaymentIntent?
   paidAt            DateTime?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
@@ -134,4 +135,30 @@ model OrderItem {
   quantity   Int
   price      Int
   cost       Int      @default(0)
+}
+
+model PaymentIntent {
+  id                String   @id @default(cuid())
+  referenceCode     String   @unique
+  qrCode            String
+  phone             String
+  tableId           String
+  customerId        String
+  businessDate      String
+  paymentMethod     String   @default("BANK_TRANSFER")
+  status            String   @default("PENDING")
+  subtotal          Int
+  costTotal         Int      @default(0)
+  note              String?
+  items             Json
+  sepayCheckoutUrl  String?
+  sepayTransactionId String?  @unique
+  orderId           String?   @unique
+  order             Order?    @relation(fields: [orderId], references: [id])
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([status])
+  @@index([phone])
+  @@index([tableId])
 }

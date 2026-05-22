@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../db.js';
-import { calculateCart, nextDailySequence, businessDate } from '../services/order-service.js';
-import { createSepayLink, buildSepayReferenceCode } from '../services/sepay-service.js';
+import { calculateCart, createOrderFromCart, businessDate } from '../services/order-service.js';
+import { createSepayLink, buildSepayIntentReferenceCode } from '../services/sepay-service.js';
 import { broadcastDataChange } from '../services/realtime.js';
 
 const router = Router();
@@ -67,7 +67,7 @@ router.post('/orders', async (req, res, next) => {
       .object({
         qrCode: z.string(),
         phone: z.string().min(8),
-        paymentMethod: z.enum(['CASH', 'BANK_TRANSFER']),
+        paymentMethod: z.literal('CASH'),
         note: z.string().optional(),
         items: z.array(z.object({ menuItemId: z.string(), quantity: z.number().int().min(1) })).min(1)
       })
@@ -92,30 +92,17 @@ router.post('/orders', async (req, res, next) => {
     const date = businessDate();
 
     const order = await prisma.$transaction(async (tx) => {
-      const dailySequence = await nextDailySequence(tx, date);
-      return tx.order.create({
-        data: {
-          businessDate: date,
-          dailySequence,
-          tableId: table.id,
-          customerId: customer.id,
-          paymentMethod: data.paymentMethod,
-          paymentStatus: data.paymentMethod === 'CASH' ? 'PENDING_PAYMENT' : 'PENDING_PAYMENT',
-          status: 'NEW',
-          subtotal,
-          costTotal,
-          note: data.note,
-          items: {
-            create: cart.map((item) => ({
-              menuItemId: item.menuItemId,
-              name: item.name,
-              quantity: item.quantity,
-              price: item.price,
-              cost: item.cost
-            }))
-          }
-        },
-        include: { table: true, customer: true, items: true }
+      return createOrderFromCart(tx, {
+        date,
+        tableId: table.id,
+        customerId: customer.id,
+        paymentMethod: 'CASH',
+        paymentStatus: 'PENDING_PAYMENT',
+        status: 'NEW',
+        subtotal,
+        costTotal,
+        note: data.note,
+        items: cart
       });
     });
 
@@ -128,39 +115,118 @@ router.post('/orders', async (req, res, next) => {
   }
 });
 
-router.post('/orders/:id/sepay', async (req, res, next) => {
+router.post('/payment-intents', async (req, res, next) => {
   try {
-    const order = await prisma.order.findUnique({
-      where: { id: req.params.id },
-      include: { table: true, items: true }
-    });
-    if (!order) {
-      return res.status(404).json({ message: 'Không tìm thấy đơn' });
-    }
-    if (order.paymentMethod !== 'BANK_TRANSFER') {
-      return res.status(400).json({ message: 'Đơn này không dùng chuyển khoản' });
+    const data = z
+      .object({
+        qrCode: z.string(),
+        phone: z.string().min(8),
+        note: z.string().optional(),
+        items: z.array(z.object({ menuItemId: z.string(), quantity: z.number().int().min(1) })).min(1)
+      })
+      .parse(req.body);
+
+    const [table, customer, cart] = await Promise.all([
+      prisma.diningTable.findUnique({ where: { qrCode: data.qrCode } }),
+      prisma.customer.upsert({
+        where: { phone: data.phone },
+        update: {},
+        create: { phone: data.phone }
+      }),
+      calculateCart(data.items)
+    ]);
+
+    if (!table || !table.active) {
+      return res.status(404).json({ message: 'Không tìm thấy bàn' });
     }
 
-    const referenceCode = order.sepayReferenceCode || buildSepayReferenceCode(order);
-    const payment = await createSepayLink({ ...order, sepayReferenceCode: referenceCode });
-    const updated = await prisma.order.update({
-      where: { id: order.id },
+    const subtotal = cart.reduce((sum, item) => sum + item.lineTotal, 0);
+    const costTotal = cart.reduce((sum, item) => sum + item.lineCost, 0);
+    const date = businessDate();
+    const referenceCode = buildSepayIntentReferenceCode(date);
+    const payment = await createSepayLink({ subtotal, sepayReferenceCode: referenceCode });
+
+    const intent = await prisma.paymentIntent.create({
       data: {
-        sepayReferenceCode: payment.referenceCode,
-        sepayCheckoutUrl: payment.checkoutUrl,
-        paymentStatus: 'PENDING_PAYMENT'
+        referenceCode,
+        qrCode: data.qrCode,
+        phone: data.phone,
+        tableId: table.id,
+        customerId: customer.id,
+        businessDate: date,
+        paymentMethod: 'BANK_TRANSFER',
+        status: 'PENDING',
+        subtotal,
+        costTotal,
+        note: data.note,
+        items: cart,
+        sepayCheckoutUrl: payment.checkoutUrl
       }
     });
 
-    broadcastDataChange('orders', { action: 'updated', orderId: updated.id });
-
-    return res.json({ order: updated, checkoutUrl: payment.checkoutUrl, qrDataUrl: payment.qrDataUrl });
+    return res.status(201).json({
+      intent: {
+        ...intent,
+        qrDataUrl: payment.qrDataUrl
+      },
+      checkoutUrl: payment.checkoutUrl,
+      qrDataUrl: payment.qrDataUrl
+    });
   } catch (error) {
     return next(error);
   }
 });
 
-router.post('/orders/:id/payos', async (req, res) => res.status(410).json({ message: 'PayOS đã được tắt, hãy dùng SePay' }));
+router.get('/payment-intents/:id', async (req, res, next) => {
+  try {
+    const intent = await prisma.paymentIntent.findUnique({
+      where: { id: req.params.id },
+      include: { order: { include: { table: true, customer: true, items: true } } }
+    });
+
+    if (!intent) {
+      return res.status(404).json({ message: 'Không tìm thấy yêu cầu thanh toán' });
+    }
+
+    return res.json({
+      intent: {
+        ...intent,
+        qrDataUrl: intent.sepayCheckoutUrl
+      },
+      order: intent.order,
+      qrDataUrl: intent.sepayCheckoutUrl,
+      checkoutUrl: intent.sepayCheckoutUrl
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.delete('/payment-intents/:id', async (req, res, next) => {
+  try {
+    const data = z.object({ phone: z.string().min(8) }).parse(req.body);
+    const intent = await prisma.paymentIntent.findUnique({ where: { id: req.params.id } });
+
+    if (!intent || intent.phone !== data.phone) {
+      return res.status(404).json({ message: 'Không tìm thấy yêu cầu thanh toán' });
+    }
+
+    if (intent.status === 'PAID' || intent.orderId) {
+      return res.status(400).json({ message: 'Đơn đã được thanh toán, không thể hủy' });
+    }
+
+    const cancelled = await prisma.paymentIntent.update({
+      where: { id: intent.id },
+      data: { status: 'CANCELLED' }
+    });
+
+    return res.json({ success: true, intent: cancelled });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/orders/:id/sepay', async (req, res) => res.status(410).json({ message: 'Luồng này đã đổi sang payment-intents, hãy dùng endpoint mới' }));
 
 router.patch('/orders/:id/cancel', async (req, res, next) => {
   try {

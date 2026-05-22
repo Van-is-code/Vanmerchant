@@ -79,6 +79,64 @@ export async function consumeIngredients(tx, order) {
   }
 }
 
+export async function createOrderFromCart(tx, {
+  date = businessDate(),
+  tableId,
+  customerId,
+  paymentMethod,
+  paymentStatus = 'PENDING_PAYMENT',
+  status = 'NEW',
+  subtotal,
+  costTotal,
+  note,
+  items
+}) {
+  const dailySequence = await nextDailySequence(tx, date);
+
+  return tx.order.create({
+    data: {
+      businessDate: date,
+      dailySequence,
+      tableId,
+      customerId,
+      paymentMethod,
+      paymentStatus,
+      status,
+      subtotal,
+      costTotal,
+      note,
+      items: {
+        create: items.map((item) => ({
+          menuItemId: item.menuItemId,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+          cost: item.cost
+        }))
+      }
+    },
+    include: { table: true, customer: true, items: true }
+  });
+}
+
+export async function createPaidOrderFromIntent(tx, intent) {
+  const order = await createOrderFromCart(tx, {
+    date: intent.businessDate,
+    tableId: intent.tableId,
+    customerId: intent.customerId,
+    paymentMethod: intent.paymentMethod,
+    paymentStatus: 'PAID',
+    status: 'PREPARING',
+    subtotal: intent.subtotal,
+    costTotal: intent.costTotal,
+    note: intent.note,
+    items: intent.items
+  });
+
+  await consumeIngredients(tx, order);
+  return order;
+}
+
 export async function markOrderPaid(orderId) {
   return prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({ where: { id: orderId } });

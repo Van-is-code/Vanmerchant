@@ -1,4 +1,5 @@
 import { config } from '../config.js';
+import { businessDate } from './order-service.js';
 
 const SEPAY_QR_BASE_URL = 'https://qr.sepay.vn/img';
 
@@ -14,6 +15,11 @@ function requireSepayConfig() {
 
 export function buildSepayReferenceCode(order) {
   return `SP${order.businessDate.replaceAll('-', '')}${String(order.dailySequence).padStart(3, '0')}`;
+}
+
+export function buildSepayIntentReferenceCode(date = businessDate()) {
+  const suffix = Math.random().toString(36).slice(2, 8).toUpperCase();
+  return `SP${date.replaceAll('-', '')}${suffix}`;
 }
 
 export function buildSepayQrUrl({ amount, referenceCode }) {
