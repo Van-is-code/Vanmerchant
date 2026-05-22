@@ -148,13 +148,31 @@ function CustomerOrder({ qrCode }) {
     if (!transferIntent?.id) return undefined;
 
     let cancelled = false;
-    syncTransferIntent(transferIntent.id).catch(() => {});
+    let timerId = null;
+
+    const pollTransferStatus = async () => {
+      try {
+        const result = await syncTransferIntent(transferIntent.id);
+        if (cancelled) return;
+
+        const status = result?.intent?.status;
+        if (!status || ['PAID', 'FAILED', 'CANCELLED'].includes(status)) {
+          return;
+        }
+
+        timerId = window.setTimeout(pollTransferStatus, 3000);
+      } catch {
+        if (!cancelled) {
+          timerId = window.setTimeout(pollTransferStatus, 5000);
+        }
+      }
+    };
+
+    pollTransferStatus();
 
     return () => {
       cancelled = true;
-      if (cancelled) {
-        return;
-      }
+      if (timerId) window.clearTimeout(timerId);
     };
   }, [transferIntent?.id]);
 
@@ -597,14 +615,14 @@ function DashboardShell({ user, onLogout, onUserChange }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const navItems = [
-    { id: 'overview',     label: 'Doanh thu',   mobileLabel: 'Doanh thu', icon: <BarChart3 size={18} />,    hidden: !canManage },
-    { id: 'orders',       label: 'Đang làm',    mobileLabel: 'Đang làm',  icon: <ClipboardList size={18} /> },
-    { id: 'delivery',     label: 'Chờ giao',    mobileLabel: 'Giao',      icon: <ReceiptText size={18} /> },
-    { id: 'history',      label: 'Lịch sử',     mobileLabel: 'Lịch sử',   icon: <History size={18} /> },
-    { id: 'menu',         label: 'Menu',        mobileLabel: 'Menu',      icon: <Utensils size={18} />,     hidden: !canManage },
-    { id: 'ingredients',  label: 'Nguyên liệu', mobileLabel: 'Nguyên liệu', icon: <Package size={18} />,  hidden: !canManage },
-    { id: 'tables',       label: 'Bàn & QR',    mobileLabel: 'Bàn & QR',  icon: <QrCode size={18} />,       hidden: !canManage },
-    { id: 'accounts',     label: 'Tài khoản',   mobileLabel: 'Tài khoản', icon: <Users size={18} />,        hidden: !canManage },
+    { id: 'overview',     label: 'Doanh thu',   hint: 'Xem doanh thu hôm nay', icon: <BarChart3 size={18} />,    hidden: !canManage },
+    { id: 'orders',       label: 'Đang làm',    hint: 'Đơn mới và đang nấu', icon: <ClipboardList size={18} /> },
+    { id: 'delivery',     label: 'Chờ giao',    hint: 'Đơn chuẩn bị giao', icon: <ReceiptText size={18} /> },
+    { id: 'history',      label: 'Lịch sử',     hint: 'Các đơn đã xử lý', icon: <History size={18} /> },
+    { id: 'menu',         label: 'Menu',        hint: 'Món ăn và giá bán', icon: <Utensils size={18} />,     hidden: !canManage },
+    { id: 'ingredients',  label: 'Nguyên liệu', hint: 'Tồn kho và giá vốn', icon: <Package size={18} />,  hidden: !canManage },
+    { id: 'tables',       label: 'Bàn & QR',    hint: 'Mã bàn và in QR', icon: <QrCode size={18} />,       hidden: !canManage },
+    { id: 'accounts',     label: 'Tài khoản',   hint: 'Quản lý nhân sự', icon: <Users size={18} />,        hidden: !canManage },
   ].filter((n) => !n.hidden);
 
   return (
@@ -627,13 +645,12 @@ function DashboardShell({ user, onLogout, onUserChange }) {
             >
               {n.icon}
               <span className="nav-label nav-label-desktop">{n.label}</span>
-              <span className="nav-label nav-label-mobile">{n.mobileLabel ?? n.label}</span>
             </button>
           ))}
         </nav>
         <div className="sidebar-footer">
           <button className="nav-item" onClick={onLogout} style={{ width: '100%' }}>
-            <LogOut size={18} /><span className="nav-label nav-label-desktop">Đăng xuất</span><span className="nav-label nav-label-mobile">Thoát</span>
+            <LogOut size={18} /><span className="nav-label nav-label-desktop">Đăng xuất</span>
           </button>
         </div>
       </aside>
@@ -691,7 +708,7 @@ function DashboardShell({ user, onLogout, onUserChange }) {
                 <span className="mobile-nav-icon">{n.icon}</span>
                 <span className="mobile-nav-text">
                   <b>{n.label}</b>
-                  <small>{n.id === 'overview' ? 'Xem doanh thu' : n.id === 'orders' ? 'Đơn đang xử lý' : n.id === 'delivery' ? 'Đơn chờ giao' : n.id === 'history' ? 'Đơn đã xong' : n.id === 'menu' ? 'Quản lý món ăn' : n.id === 'ingredients' ? 'Quản lý nguyên liệu' : n.id === 'tables' ? 'Quản lý bàn và QR' : 'Quản lý tài khoản'}</small>
+                  <small>{n.hint}</small>
                 </span>
                 <ChevronRight size={16} />
               </button>

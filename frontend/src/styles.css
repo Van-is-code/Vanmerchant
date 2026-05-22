@@ -197,6 +197,12 @@ select.field { appearance: none;
 .nav-item:hover { background: rgba(255,255,255,.08); color: #fff; }
 .nav-item.active { background: var(--green); color: #fff; }
 .nav-item svg { flex-shrink: 0; opacity: .85; }
+.nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .sidebar-footer {
   padding: 10px 6px 16px;
@@ -1016,6 +1022,10 @@ select.field { appearance: none;
     font-size: 11px;
     line-height: 1.35;
     color: rgba(255,255,255,.68);
+  }
+
+  .nav-label-desktop {
+    display: inline;
   }
 
   .mobile-nav-logout {
