@@ -71,6 +71,7 @@ function CustomerOrder({ qrCode }) {
   const [history, setHistory] = useState([]);
   const [message, setMessage] = useState('');
   const [orderPopup, setOrderPopup] = useState(null);
+  const [pendingPaymentOrderId, setPendingPaymentOrderId] = useState(null);
 
   const loadCatalog = () => api(`/api/public/tables/${qrCode}`)
     .then((data) => {
@@ -92,6 +93,22 @@ function CustomerOrder({ qrCode }) {
       loadHistory();
     }
   });
+
+  useEffect(() => {
+    if (!pendingPaymentOrderId) {
+      return;
+    }
+
+    const paidOrder = history.find((order) => order.id === pendingPaymentOrderId && order.paymentStatus === 'PAID');
+    if (!paidOrder) {
+      return;
+    }
+
+    setCheckout(null);
+    setPendingPaymentOrderId(null);
+    setOrderPopup({ kind: 'paid', order: paidOrder });
+    setMessage('Thanh toán chuyển khoản đã thành công.');
+  }, [history, pendingPaymentOrderId]);
 
   const loadHistory = () => {
     if (authorized && phone.length >= 8) {
@@ -146,10 +163,11 @@ function CustomerOrder({ qrCode }) {
     if (paymentMethod === 'BANK_TRANSFER') {
       const payment = await api(`/api/public/orders/${order.id}/sepay`, { method: 'POST' });
       setCheckout(payment);
+      setPendingPaymentOrderId(order.id);
       setCart({});
       setNote('');
       await loadHistory();
-      setOrderPopup({ order, payment });
+      setOrderPopup({ kind: 'pending-payment', order, payment });
       return;
     }
 
@@ -171,6 +189,13 @@ function CustomerOrder({ qrCode }) {
   function showOrders() {
     setOrderPopup(null);
     document.getElementById('customer-history')?.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function openPaymentQr() {
+    const paymentUrl = orderPopup?.payment?.checkoutUrl || orderPopup?.payment?.qrDataUrl || checkout?.checkoutUrl || checkout?.qrDataUrl;
+    if (paymentUrl) {
+      window.open(paymentUrl, '_blank', 'noopener,noreferrer');
+    }
   }
 
   if (!authorized) {
@@ -274,15 +299,28 @@ function CustomerOrder({ qrCode }) {
         <div className="modal-backdrop">
           <section className="success-modal">
             <Check size={42} />
-            <h2>Đặt hàng thành công</h2>
-            <p>Đơn #{orderPopup.order.dailySequence} đã được gửi đến quán ở trạng thái chờ.</p>
+            <h2>{orderPopup.kind === 'paid' ? 'Thanh toán thành công' : 'Đặt hàng thành công'}</h2>
+            {orderPopup.kind === 'paid' ? (
+              <p>Đơn #{orderPopup.order.dailySequence} đã được ngân hàng xác nhận và tự động chuyển sang đã thanh toán.</p>
+            ) : (
+              <p>Đơn #{orderPopup.order.dailySequence} đã được gửi đến quán. Vui lòng quét mã QR để chuyển khoản và chờ xác nhận từ SePay.</p>
+            )}
+            {orderPopup.kind !== 'paid' && orderPopup.payment?.qrDataUrl && (
+              <div className="payment-qr-box">
+                <img className="pay-qr" src={orderPopup.payment.qrDataUrl} alt="SePay QR" />
+                <p>Quét mã QR bằng app ngân hàng để chuyển khoản đúng số tiền.</p>
+              </div>
+            )}
             <div className="modal-actions">
               <button className="primary" onClick={showOrders}>Xem đơn hàng</button>
               <button onClick={() => setOrderPopup(null)}>Tiếp tục gọi món</button>
-              {orderPopup.payment?.checkoutUrl && (
-                <a className="button-link primary-link" href={orderPopup.payment.checkoutUrl}>Mở mã QR SePay</a>
+              {orderPopup.kind !== 'paid' && (orderPopup.payment?.checkoutUrl || orderPopup.payment?.qrDataUrl) && (
+                <button className="button-link primary-link" onClick={openPaymentQr}>Quét mã QR</button>
               )}
             </div>
+            {orderPopup.kind !== 'paid' && (
+              <p className="muted payment-wait-note">Đang chờ tiền về. Khi ngân hàng xác nhận giao dịch, trạng thái sẽ tự đổi sang thanh toán thành công.</p>
+            )}
           </section>
         </div>
       )}
