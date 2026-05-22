@@ -100,7 +100,7 @@ router.post('/orders', async (req, res, next) => {
           tableId: table.id,
           customerId: customer.id,
           paymentMethod: data.paymentMethod,
-          paymentStatus: data.paymentMethod === 'CASH' ? 'PENDING_PAYMENT' : 'UNPAID',
+          paymentStatus: data.paymentMethod === 'CASH' ? 'PENDING_PAYMENT' : 'PENDING_PAYMENT',
           status: 'NEW',
           subtotal,
           costTotal,

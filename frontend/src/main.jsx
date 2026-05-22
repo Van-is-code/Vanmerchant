@@ -298,17 +298,17 @@ function CustomerOrder({ qrCode }) {
       {orderPopup && (
         <div className="modal-backdrop">
           <section className="success-modal">
-            <Check size={42} />
-            <h2>{orderPopup.kind === 'paid' ? 'Thanh toán thành công' : 'Đặt hàng thành công'}</h2>
+            {orderPopup.kind === 'paid' ? <Check size={42} /> : <ReceiptText size={42} />}
+            <h2>{orderPopup.kind === 'paid' ? 'Thanh toán thành công' : 'Đơn đang chờ chuyển khoản'}</h2>
             {orderPopup.kind === 'paid' ? (
-              <p>Đơn #{orderPopup.order.dailySequence} đã được ngân hàng xác nhận và tự động chuyển sang đã thanh toán.</p>
+              <p>Đơn #{orderPopup.order.dailySequence} đã được ngân hàng xác nhận và tự động chuyển sang đã thanh toán. Đây mới là lúc đơn được tính là gọi món thành công.</p>
             ) : (
-              <p>Đơn #{orderPopup.order.dailySequence} đã được gửi đến quán. Vui lòng quét mã QR để chuyển khoản và chờ xác nhận từ SePay.</p>
+              <p>Đơn #{orderPopup.order.dailySequence} mới ở trạng thái chờ thanh toán. Chưa tính là gọi món thành công cho tới khi tiền về tài khoản.</p>
             )}
             {orderPopup.kind !== 'paid' && orderPopup.payment?.qrDataUrl && (
               <div className="payment-qr-box">
                 <img className="pay-qr" src={orderPopup.payment.qrDataUrl} alt="SePay QR" />
-                <p>Quét mã QR bằng app ngân hàng để chuyển khoản đúng số tiền.</p>
+                <p>Quét mã QR bằng app ngân hàng để chuyển khoản đúng số tiền. Sau khi ngân hàng xác nhận, hệ thống mới báo thanh toán thành công.</p>
               </div>
             )}
             <div className="modal-actions">
