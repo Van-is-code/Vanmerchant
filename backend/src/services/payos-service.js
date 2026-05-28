@@ -4,6 +4,22 @@ import { businessDate } from './order-service.js';
 
 let payosClient;
 
+function resolveCreatePaymentLinkFn(payos) {
+  if (payos?.paymentRequests && typeof payos.paymentRequests.create === 'function') {
+    return payos.paymentRequests.create.bind(payos.paymentRequests);
+  }
+
+  if (payos?.paymentLinks && typeof payos.paymentLinks.create === 'function') {
+    return payos.paymentLinks.create.bind(payos.paymentLinks);
+  }
+
+  if (typeof payos?.createPaymentLink === 'function') {
+    return payos.createPaymentLink.bind(payos);
+  }
+
+  throw new Error('SDK PayOS khong ho tro tao payment link (thieu createPayment API)');
+}
+
 function requirePayosConfig() {
   const missing = [];
 
@@ -47,6 +63,7 @@ export async function createPayosLink({ amount, referenceCode, description, item
   }
 
   const payos = getPayosClient();
+  const createPaymentLink = resolveCreatePaymentLinkFn(payos);
   const orderCode = buildPayosOrderCode();
   const paymentData = {
     orderCode,
@@ -57,12 +74,18 @@ export async function createPayosLink({ amount, referenceCode, description, item
     ...(items?.length ? { items } : {})
   };
 
-  const paymentLink = await payos.paymentRequests.create(paymentData);
+  const paymentLink = await createPaymentLink(paymentData);
+  const checkoutUrl = paymentLink?.checkoutUrl || paymentLink?.paymentLink || paymentLink?.paymentUrl || null;
+  const qrDataUrl = paymentLink?.qrCode || paymentLink?.qrDataUrl || paymentLink?.qrCodeDataURL || checkoutUrl;
+
+  if (!checkoutUrl) {
+    throw new Error('PayOS tra ve du lieu khong hop le: thieu checkoutUrl');
+  }
 
   return {
     orderCode,
-    checkoutUrl: paymentLink.checkoutUrl,
-    qrDataUrl: paymentLink.qrCode || paymentLink.checkoutUrl,
+    checkoutUrl,
+    qrDataUrl,
     paymentLink
   };
 }

@@ -144,7 +144,21 @@ router.post('/payment-intents', async (req, res, next) => {
     const costTotal = cart.reduce((sum, item) => sum + item.lineCost, 0);
     const date = businessDate();
     const referenceCode = buildPayosIntentReferenceCode(date);
-    const payment = await createPayosLink({ amount: subtotal, referenceCode });
+    let payment;
+
+    try {
+      payment = await createPayosLink({ amount: subtotal, referenceCode });
+    } catch (error) {
+      if (typeof error?.message === 'string' && (
+        error.message.includes('Thiếu cấu hình PayOS') ||
+        error.message.includes('SDK PayOS khong ho tro tao payment link') ||
+        error.message.includes('PayOS tra ve du lieu khong hop le')
+      )) {
+        return res.status(400).json({ message: error.message });
+      }
+
+      throw error;
+    }
 
     const intent = await prisma.paymentIntent.create({
       data: {
