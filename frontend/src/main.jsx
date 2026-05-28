@@ -25,6 +25,7 @@ import {
   Users,
   Trash2,
   Utensils,
+  Search,
   ChevronLeft,
   ChevronRight,
   Info,
@@ -88,6 +89,8 @@ function CustomerOrder({ qrCode }) {
   const [authorized, setAuthorized]     = useState(Boolean(phone));
   const [table, setTable]               = useState(null);
   const [categories, setCategories]     = useState([]);
+  const [menuSearch, setMenuSearch]     = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
   const [cart, setCart]                 = useState({});
   const [note, setNote]                 = useState('');
   const [history, setHistory]           = useState([]);
@@ -178,6 +181,20 @@ function CustomerOrder({ qrCode }) {
   useEffect(() => { loadHistory(); }, [authorized, phone]);
 
   const items = categories.flatMap((c) => c.items);
+  const filteredCategories = useMemo(() => {
+    const query = menuSearch.trim().toLowerCase();
+    return categories
+      .map((category) => ({
+        ...category,
+        items: category.items.filter((item) => {
+          const matchCategory = categoryFilter === 'all' || item.categoryId === categoryFilter;
+          const haystack = [item.name, item.description || ''].join(' ').toLowerCase();
+          const matchSearch = !query || haystack.includes(query);
+          return matchCategory && matchSearch;
+        })
+      }))
+      .filter((category) => category.items.length > 0);
+  }, [categories, menuSearch, categoryFilter]);
   const cartLines = Object.entries(cart)
     .map(([id, qty]) => ({ item: items.find((i) => i.id === id), quantity: qty }))
     .filter((l) => l.item);
@@ -251,7 +268,7 @@ function CustomerOrder({ qrCode }) {
         <div className="login-phone-card">
           <div className="brand-area">
             <Store size={36} />
-            <h1>VanMerchant</h1>
+            <h1>Trà Nhà Lâm</h1>
           </div>
           <p className="desc">{table ? `${table.name} — nhập số điện thoại để gọi món` : 'Nhập số điện thoại để bắt đầu gọi món'}</p>
           <form className="input-row" onSubmit={enterPhone}>
@@ -288,26 +305,69 @@ function CustomerOrder({ qrCode }) {
       {activeTab === 'menu' && (
         <>
           <div className="customer-menu-tab">
-            {categories.map((cat) => (
-              <div className="category-section" key={cat.id}>
-                <h2>{cat.name}</h2>
-                {cat.items.map((item) => (
-                  <div className="menu-item-row" key={item.id} style={{ marginBottom: 8 }}>
-                    <img src={item.imageUrl || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=200&q=60'} alt={item.name} />
-                    <div className="item-body">
-                      <div className="item-name">{item.name}</div>
-                      {item.description && <div className="item-desc">{item.description}</div>}
-                      <div className="item-price">{money(item.price)}</div>
-                    </div>
-                    <div className="stepper">
-                      <button className="stepper-btn" onClick={() => changeQty(item.id, -1)} disabled={!cart[item.id]}><Minus size={14} /></button>
-                      <span className="stepper-count">{cart[item.id] || 0}</span>
-                      <button className="stepper-btn add" onClick={() => changeQty(item.id, 1)}><Plus size={14} /></button>
-                    </div>
-                  </div>
+            <div className="menu-filter-panel">
+              <div className="menu-search-box field-group">
+                <Search size={16} />
+                <input
+                  className="field"
+                  value={menuSearch}
+                  onChange={(e) => setMenuSearch(e.target.value)}
+                  placeholder="Tìm món trong thực đơn"
+                  type="search"
+                />
+              </div>
+              <div className="menu-filter-chips">
+                <button
+                  type="button"
+                  className={`filter-chip ${categoryFilter === 'all' ? 'active' : ''}`}
+                  onClick={() => setCategoryFilter('all')}
+                >
+                  Tất cả
+                </button>
+                {categories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    className={`filter-chip ${categoryFilter === cat.id ? 'active' : ''}`}
+                    onClick={() => setCategoryFilter(cat.id)}
+                  >
+                    {cat.name}
+                  </button>
                 ))}
               </div>
-            ))}
+            </div>
+
+            {filteredCategories.length === 0 ? (
+              <div className="empty-state cute-empty">
+                <Utensils size={40} />
+                <p>Không tìm thấy món nào phù hợp.</p>
+              </div>
+            ) : (
+              filteredCategories.map((cat) => (
+                <div className="category-section" key={cat.id}>
+                  <h2>{cat.name}</h2>
+                  {cat.items.map((item) => (
+                    <div className={`menu-item-row ${item.hidden ? 'sold-out' : ''}`} key={item.id} style={{ marginBottom: 8 }}>
+                      <img src={item.imageUrl || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=200&q=60'} alt={item.name} />
+                      <div className="item-body">
+                        <div className="item-name">{item.name}</div>
+                        {item.description && <div className="item-desc">{item.description}</div>}
+                        <div className="item-price">{money(item.price)}</div>
+                      </div>
+                      {item.hidden ? (
+                        <div className="sold-out-label">Hết món</div>
+                      ) : (
+                        <div className="stepper">
+                          <button className="stepper-btn" onClick={() => changeQty(item.id, -1)} disabled={!cart[item.id]}><Minus size={14} /></button>
+                          <span className="stepper-count">{cart[item.id] || 0}</span>
+                          <button className="stepper-btn add" onClick={() => changeQty(item.id, 1)}><Plus size={14} /></button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))
+            )}
           </div>
           {cartCount > 0 && (
             <div className="cart-footer">
@@ -382,6 +442,7 @@ function CustomerOrder({ qrCode }) {
       {paymentChoiceOpen && draftOrder && (
         <div className="modal-backdrop">
           <div className="modal">
+            <button className="modal-close-btn" type="button" aria-label="Đóng" onClick={() => { setPaymentChoiceOpen(false); setDraftOrder(null); }}>✕</button>
             <div className="modal-icon info"><ReceiptText size={24} /></div>
             <h2>Chọn hình thức thanh toán</h2>
             <p>Đơn được tạo ngay với tiền mặt. Chuyển khoản sẽ chờ ngân hàng xác nhận.</p>
@@ -541,7 +602,7 @@ function Login({ onLogin }) {
   return (
     <div className="login-page">
       <form className="login-card" onSubmit={submit}>
-        <div className="logo-area"><ChefHat size={36} /><h1>VanMerchant POS</h1></div>
+        <div className="logo-area"><ChefHat size={36} /><h1>Trà Nhà Lâm POS</h1></div>
         <p className="sub">Quản lý quán, đơn hàng & nhân sự</p>
         <div className="field-group">
           <Phone size={18} />
@@ -575,7 +636,7 @@ function DashboardShell({ user, onLogout, onUserChange }) {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="sidebar-brand"><Store size={22} /><span>VanMerchant</span></div>
+        <div className="sidebar-brand"><Store size={22} /><span>Trà Nhà Lâm</span></div>
         <nav className="sidebar-nav">
           {navItems.map((n) => (
             <button key={n.id} className={`nav-item ${tab === n.id ? 'active' : ''}`} onClick={() => { setTab(n.id); setMobileNavOpen(false); }}>
@@ -699,14 +760,6 @@ function Overview({ refreshToken }) {
   }, [period, data]);
 
   // Auto-scroll to the beginning on data change
-  useEffect(() => {
-    if (chartScrollRef.current) {
-      setTimeout(() => {
-        chartScrollRef.current.scrollLeft = 0;
-      }, 100);
-    }
-  }, [barData]);
-
   if (!data) return (
     <div className="ov-loading">
       <div className="ov-spinner" />
@@ -715,6 +768,7 @@ function Overview({ refreshToken }) {
   );
 
   const periodLabels = { day: 'Theo ngày', month: 'Theo tháng', year: 'Theo năm' };
+  const chartLabels = { day: '10 ngày gần nhất', month: '10 tháng gần nhất', year: '10 năm gần nhất' };
 
   // Pie data: top 6 + "Khác"
   const top6 = topProducts.slice(0, 6);
@@ -762,51 +816,30 @@ function Overview({ refreshToken }) {
 
         {/* Bar chart */}
         <div className="ov-chart-card">
-          <div className="ov-chart-title">Doanh thu {periodLabels[period].toLowerCase()}</div>
-          <div className="ov-chart-subtitle">
-            {barData.length > 7 && <span>← Trượt để xem thêm →</span>}
-          </div>
+          <div className="ov-chart-title">Doanh thu {chartLabels[period].toLowerCase()}</div>
           {barData.length === 0 ? (
             <div className="ov-empty-chart">Không có dữ liệu</div>
           ) : (
-            <div 
-              ref={chartScrollRef}
-              style={{
-                overflowX: 'auto',
-                overflowY: 'hidden',
-                scrollBehavior: 'smooth',
-                WebkitOverflowScrolling: 'touch',
-                marginBottom: 8,
-                paddingBottom: 8,
-              }}
-            >
-              <div style={{ 
-                minWidth: barData.length > 7 ? barData.length * 60 : '100%',
-                display: 'flex',
-                justifyContent: barData.length <= 7 ? 'center' : 'flex-start'
-              }}>
-                <ResponsiveContainer width={barData.length > 7 ? barData.length * 60 : '100%'} height={220}>
-                  <BarChart data={barData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }} barCategoryGap="35%">
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fontSize: 12, fill: 'var(--ink-3)' }} axisLine={false} tickLine={false} />
-                    <YAxis tickFormatter={(v) => v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} tick={{ fontSize: 11, fill: 'var(--ink-3)' }} axisLine={false} tickLine={false} width={52} />
-                    <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'rgba(37,99,235,0.06)', radius: 8 }} />
-                    <Bar dataKey="revenue" name="Doanh thu" fill="url(#barGrad)" radius={[6, 6, 0, 0]} />
-                    <defs>
-                      <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={1} />
-                        <stop offset="100%" stopColor="#1d4ed8" stopOpacity={0.85} />
-                      </linearGradient>
-                    </defs>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={barData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }} barCategoryGap="25%">
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 12, fill: 'var(--ink-3)' }} axisLine={false} tickLine={false} interval={0} />
+                <YAxis tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} tick={{ fontSize: 11, fill: 'var(--ink-3)' }} axisLine={false} tickLine={false} width={52} />
+                <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'rgba(37,99,235,0.06)', radius: 8 }} />
+                <Bar dataKey="revenue" name="Doanh thu" fill="url(#barGrad)" radius={[6, 6, 0, 0]} />
+                <defs>
+                  <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#3b82f6" stopOpacity={1} />
+                    <stop offset="100%" stopColor="#1d4ed8" stopOpacity={0.85} />
+                  </linearGradient>
+                </defs>
+              </BarChart>
+            </ResponsiveContainer>
           )}
           <div className="ov-bar-xaxis-label">
-            {period === 'day' && 'Ngày tháng này'}
-            {period === 'month' && 'Tháng năm nay'}
-            {period === 'year' && `Tháng năm ${new Date().getFullYear() - 1}`}
+            {period === 'day' && '10 ngày gần nhất'}
+            {period === 'month' && '10 tháng gần nhất'}
+            {period === 'year' && '10 năm gần nhất'}
           </div>
         </div>
       </div>
@@ -900,6 +933,8 @@ function Orders({ title, statuses, emptyText = 'Chưa có bill.', user, refreshT
   const [orders, setOrders] = useState([]);
   const [page, setPage]     = useState(1);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
   const statusQuery = statuses?.length ? `?status=${statuses.join(',')}` : '';
   const load = () => api(`/api/orders${statusQuery}`).then(setOrders);
   useEffect(() => { load(); setPage(1); }, [statusQuery, refreshToken]);
@@ -910,14 +945,67 @@ function Orders({ title, statuses, emptyText = 'Chưa có bill.', user, refreshT
     load();
   }
 
-  const totalPages = Math.max(1, Math.ceil(orders.length / ORDERS_PER_PAGE));
-  const slice = orders.slice((page - 1) * ORDERS_PER_PAGE, page * ORDERS_PER_PAGE);
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const availableTypes = Array.from(new Set(orders.map((order) => order.status))).sort();
+  const filteredOrders = orders.filter((order) => {
+    const matchType = typeFilter === 'all' || order.status === typeFilter;
+    if (!matchType) return false;
+    if (!normalizedSearch) return true;
+    const haystack = [
+      order.dailySequence,
+      order.table?.name || '',
+      order.customer?.phone || '',
+      order.items?.map((item) => item.name).join(' ') || ''
+    ]
+      .join(' ')
+      .toLowerCase();
+    return haystack.includes(normalizedSearch);
+  });
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / ORDERS_PER_PAGE));
+  const slice = filteredOrders.slice((page - 1) * ORDERS_PER_PAGE, page * ORDERS_PER_PAGE);
   const selectedOrder = orders.find((o) => o.id === selectedOrderId);
+
+  useEffect(() => {
+    if (typeFilter !== 'all' && !availableTypes.includes(typeFilter)) {
+      setTypeFilter('all');
+    }
+  }, [availableTypes, typeFilter]);
 
   return (
     <div>
-      <div className="section-head"><h2>{title}</h2><span className="count">{orders.length} đơn</span></div>
-      {orders.length === 0 && <div className="empty-state"><ClipboardList size={40} /><p>{emptyText}</p></div>}
+      <div className="section-head"><h2>{title}</h2><span className="count">{filteredOrders.length} đơn</span></div>
+      <div className="orders-toolbar">
+        <div className="menu-search-box field-group orders-search-box">
+          <Search size={16} />
+          <input
+            className="field"
+            value={searchTerm}
+            onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
+            placeholder="Tìm theo bàn, SĐT, món hoặc mã bill"
+            type="search"
+          />
+        </div>
+        <div className="menu-filter-chips">
+          <button
+            type="button"
+            className={`filter-chip ${typeFilter === 'all' ? 'active' : ''}`}
+            onClick={() => { setTypeFilter('all'); setPage(1); }}
+          >
+            Tất cả
+          </button>
+          {availableTypes.map((status) => (
+            <button
+              key={status}
+              type="button"
+              className={`filter-chip ${typeFilter === status ? 'active' : ''}`}
+              onClick={() => { setTypeFilter(status); setPage(1); }}
+            >
+              {STATUS_MAP[status] || status}
+            </button>
+          ))}
+        </div>
+      </div>
+      {filteredOrders.length === 0 && <div className="empty-state"><ClipboardList size={40} /><p>{emptyText}</p></div>}
       <div className="orders-grid">
         {slice.map((order) => (
           <div className="order-card" key={order.id}>
@@ -1098,14 +1186,25 @@ function OrderHistory({ user, refreshToken }) {
 function MenuManager({ refreshToken }) {
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [menuSearch, setMenuSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [showCategoryFilters, setShowCategoryFilters] = useState(false);
+  const [showCategoryPanel, setShowCategoryPanel] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [form, setForm]   = useState({ name: '', price: 0, description: '', imageUrl: '', categoryId: '' });
   const [editingId, setEditingId] = useState(null);
   const [editingForm, setEditingForm] = useState(null);
-  const load = () => api('/api/admin/menu-items').then(setItems);
-  useEffect(() => { load(); }, [refreshToken]);
-  useRealtimeUpdates(['menu'], load);
-  useEffect(() => { api('/api/admin/categories').then(setCategories).catch(() => {}); }, []);
+  const [showCategoryForm, setShowCategoryForm] = useState(false);
+  const [categoryForm, setCategoryForm] = useState({ name: '', sortOrder: 0 });
+  const [editingCategoryId, setEditingCategoryId] = useState(null);
+  const [editingCategoryForm, setEditingCategoryForm] = useState(null);
+
+  const loadItems = () => api('/api/admin/menu-items').then(setItems);
+  const loadCategories = () => api('/api/admin/categories').then(setCategories);
+  const loadMenu = () => Promise.all([loadItems(), loadCategories()]);
+
+  useEffect(() => { loadMenu(); }, [refreshToken]);
+  useRealtimeUpdates(['menu'], loadMenu);
 
   function chooseImage(e) {
     const file = e.target.files?.[0];
@@ -1120,7 +1219,7 @@ function MenuManager({ refreshToken }) {
     await api('/api/admin/menu-items', { method: 'POST', body: JSON.stringify({ ...form, price: Number(form.price), categoryId: form.categoryId || null }) });
     setForm({ name: '', price: 0, description: '', imageUrl: '', categoryId: '' });
     setShowAddForm(false);
-    load();
+    loadItems();
   }
 
   function startEdit(item) {
@@ -1130,24 +1229,187 @@ function MenuManager({ refreshToken }) {
 
   async function saveEdit(itemId) {
     await api(`/api/admin/menu-items/${itemId}`, { method: 'PUT', body: JSON.stringify({ ...editingForm, price: Number(editingForm.price), categoryId: editingForm.categoryId || null }) });
-    setEditingId(null); setEditingForm(null); load();
+    setEditingId(null); setEditingForm(null); loadItems();
   }
 
   async function removeItem(itemId) {
     if (!window.confirm('Xóa vĩnh viễn món này?')) return;
     await api(`/api/admin/menu-items/${itemId}`, { method: 'DELETE' });
     if (editingId === itemId) { setEditingId(null); setEditingForm(null); }
-    load();
+    loadItems();
   }
 
   async function toggleOutOfStock(itemId) {
     await api(`/api/admin/menu-items/${itemId}/toggle-hidden`, { method: 'PUT' });
-    load();
+    loadItems();
+  }
+
+  function startEditCategory(category) {
+    setEditingCategoryId(category.id);
+    setEditingCategoryForm({ name: category.name, sortOrder: category.sortOrder ?? 0 });
+    setShowCategoryForm(false);
+  }
+
+  async function submitCategory(e) {
+    e.preventDefault();
+    await api('/api/admin/categories', {
+      method: 'POST',
+      body: JSON.stringify({ name: categoryForm.name.trim(), sortOrder: Number(categoryForm.sortOrder) || 0 })
+    });
+    setCategoryForm({ name: '', sortOrder: 0 });
+    setShowCategoryForm(false);
+    loadCategories();
+  }
+
+  async function saveCategory(categoryId) {
+    await api(`/api/admin/categories/${categoryId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name: editingCategoryForm.name.trim(), sortOrder: Number(editingCategoryForm.sortOrder) || 0 })
+    });
+    setEditingCategoryId(null);
+    setEditingCategoryForm(null);
+    loadCategories();
+  }
+
+  useEffect(() => {
+    if (categoryFilter !== 'all' && !categories.some((category) => category.id === categoryFilter)) {
+      setCategoryFilter('all');
+    }
+  }, [categories, categoryFilter]);
+
+  const normalizedMenuSearch = menuSearch.trim().toLowerCase();
+  const filteredItems = items.filter((item) => {
+    const matchCategory = categoryFilter === 'all' || item.categoryId === categoryFilter;
+    if (!matchCategory) return false;
+    if (!normalizedMenuSearch) return true;
+    const haystack = [item.name, item.description || '', item.category?.name || ''].join(' ').toLowerCase();
+    return haystack.includes(normalizedMenuSearch);
+  });
+
+  async function removeCategory(categoryId, categoryName) {
+    if (!window.confirm(`Xóa phân loại "${categoryName}"? Các món thuộc loại này sẽ được chuyển về chưa phân loại.`)) return;
+    await api(`/api/admin/categories/${categoryId}`, { method: 'DELETE' });
+    if (editingCategoryId === categoryId) {
+      setEditingCategoryId(null);
+      setEditingCategoryForm(null);
+    }
+    loadCategories();
+    loadItems();
   }
 
   return (
     <div>
-      <div className="section-head"><h2>Menu</h2><span className="count">{items.length} món</span></div>
+      <div className="section-head"><h2>Menu</h2><span className="count">{filteredItems.length} món</span></div>
+      <button
+        className={`menu-category-toggle ${showCategoryPanel ? 'active' : ''}`}
+        type="button"
+        onClick={() => setShowCategoryPanel((v) => !v)}
+      >
+        <span className="menu-category-toggle-left">
+          {showCategoryPanel ? <EyeOff size={16} /> : <Eye size={16} />}
+          <span>{showCategoryPanel ? 'Ẩn card phân loại' : 'Hiện card phân loại'}</span>
+        </span>
+        <span className="menu-category-toggle-count">{categories.length} loại</span>
+      </button>
+      {showCategoryPanel && (
+        <div className="menu-category-panel">
+          <div className="section-head" style={{ marginBottom: 12 }}>
+            <h2>Phân loại</h2>
+            <span className="count">{categories.length} loại</span>
+          </div>
+          <button className="btn btn-ghost" onClick={() => setShowCategoryForm((v) => !v)} style={{ marginBottom: 12 }}>
+            <Plus size={16} /> {showCategoryForm ? 'Ẩn form' : 'Thêm phân loại'}
+          </button>
+          {showCategoryForm && (
+            <form className="inline-form menu-category-form" onSubmit={submitCategory}>
+              <input className="field" value={categoryForm.name} onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })} placeholder="Tên phân loại" required />
+              <input className="field" type="number" value={categoryForm.sortOrder} onChange={(e) => setCategoryForm({ ...categoryForm, sortOrder: e.target.value })} placeholder="Thứ tự" />
+              <button className="btn btn-primary" type="submit"><Plus size={16} /> Lưu phân loại</button>
+            </form>
+          )}
+          <div className="category-grid">
+            {categories.map((category) => {
+              const count = items.filter((item) => item.categoryId === category.id).length;
+              const isEditing = editingCategoryId === category.id && editingCategoryForm;
+              return (
+                <div key={category.id} className="category-admin-card">
+                  {isEditing ? (
+                    <div className="category-admin-edit">
+                      <input className="field" value={editingCategoryForm.name} onChange={(e) => setEditingCategoryForm({ ...editingCategoryForm, name: e.target.value })} placeholder="Tên phân loại" />
+                      <input className="field" type="number" value={editingCategoryForm.sortOrder} onChange={(e) => setEditingCategoryForm({ ...editingCategoryForm, sortOrder: e.target.value })} placeholder="Thứ tự" />
+                      <div className="admin-card-actions">
+                        <button className="btn btn-primary" type="button" onClick={() => saveCategory(category.id)}><Check size={14} /> Lưu</button>
+                        <button className="btn btn-ghost" type="button" onClick={() => { setEditingCategoryId(null); setEditingCategoryForm(null); }}>Hủy</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="category-admin-head">
+                        <div>
+                          <b>{category.name}</b>
+                          <p className="muted">{count} món</p>
+                        </div>
+                        <span className="category-order">#{category.sortOrder ?? 0}</span>
+                      </div>
+                      <div className="admin-card-actions">
+                        <button className="btn btn-ghost" type="button" onClick={() => startEditCategory(category)}><Utensils size={14} /> Sửa</button>
+                        <button className="btn btn-danger" type="button" onClick={() => removeCategory(category.id, category.name)}><Trash2 size={14} /> Xóa</button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      <div className="orders-toolbar">
+        <div className="menu-search-box field-group orders-search-box">
+          <Search size={16} />
+          <input
+            className="field"
+            value={menuSearch}
+            onChange={(e) => setMenuSearch(e.target.value)}
+            placeholder="Tìm món theo tên hoặc mô tả"
+            type="search"
+          />
+        </div>
+        <div className="orders-filter-toggle-row">
+          <button className="btn btn-ghost" type="button" onClick={() => setShowCategoryFilters((v) => !v)}>
+            {showCategoryFilters ? 'Ẩn phân loại' : 'Hiện phân loại'}
+          </button>
+          {categoryFilter !== 'all' && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setCategoryFilter('all')}
+            >
+              Bỏ lọc: {categories.find((category) => category.id === categoryFilter)?.name || 'Đã chọn'}
+            </button>
+          )}
+        </div>
+        {showCategoryFilters && (
+          <div className="menu-filter-chips">
+            <button
+              type="button"
+              className={`filter-chip ${categoryFilter === 'all' ? 'active' : ''}`}
+              onClick={() => setCategoryFilter('all')}
+            >
+              Tất cả
+            </button>
+            {categories.map((category) => (
+              <button
+                key={category.id}
+                type="button"
+                className={`filter-chip ${categoryFilter === category.id ? 'active' : ''}`}
+                onClick={() => setCategoryFilter(category.id)}
+              >
+                {category.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       <button className="btn btn-primary" onClick={() => setShowAddForm(!showAddForm)} style={{ marginBottom: 16 }}><Plus size={16} /> {showAddForm ? 'Ẩn' : 'Thêm mới'}</button>
       {showAddForm && (
         <form className="menu-add-form" onSubmit={submit}>
@@ -1168,7 +1430,7 @@ function MenuManager({ refreshToken }) {
         </form>
       )}
       <div className="menu-grid">
-        {items.map((item) => {
+        {filteredItems.map((item) => {
           const category = categories.find((c) => c.id === item.categoryId);
           return (
             <div className={`menu-admin-card ${item.hidden ? 'is-muted' : ''}`} key={item.id}>

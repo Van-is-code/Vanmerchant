@@ -20,7 +20,7 @@ router.get('/tables/:qrCode', async (req, res, next) => {
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
       include: {
         items: {
-          where: { active: true, hidden: false },
+          where: { active: true },
           orderBy: { name: 'asc' }
         }
       }
