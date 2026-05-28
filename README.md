@@ -23,7 +23,7 @@ npm.cmd run dev
 
 Đặt `DATABASE_URL` trong `backend\.env` theo kết nối PostgreSQL của bạn, ví dụ `postgresql://user:pass@localhost:5432/vanmerchant`.
 
-Frontend chạy tại `http://localhost:5173`, backend chạy tại `http://localhost:4000`.
+Frontend chạy tại `http://localhost:2245`, backend chạy tại `http://localhost:2026`.
 
 Tài khoản seed:
 
@@ -97,8 +97,8 @@ Repo đã có sẵn bộ automation để chạy production trên VPS:
 - `scripts/release_to_vps.sh`: push code lên GitHub rồi SSH qua VPS để chạy deploy script.
 - `deploy/docker-compose.prod.yml`: chạy 3 service `postgres`, `backend`, `frontend`.
 - `deploy/nginx/vanmerchant.conf`: reverse proxy theo domain:
-  - FE: `vanmerchant.uyentoan.studio` -> container frontend
-  - BE: `vanmerchantapi.uyentoan.studio` -> container backend
+  - FE: `tranhalam.uyentoan.studio` -> container frontend
+  - BE: `apitranhalam.uyentoan.studio` -> container backend
 
 ### 1) Chuẩn bị DNS
 
