@@ -229,16 +229,35 @@ function CustomerOrder({ qrCode }) {
 
   async function chooseCash() {
     if (!draftOrder) return;
-    const order = await api('/api/public/orders', { method: 'POST', body: JSON.stringify({ ...draftOrder, paymentMethod: 'CASH' }) });
-    setPaymentChoiceOpen(false); setDraftOrder(null); setCart({}); setNote('');
-    await loadHistory();
-    setSuccessPopup({ kind: 'cash', order });
+    try {
+      const order = await api('/api/public/orders', { method: 'POST', body: JSON.stringify({ ...draftOrder, paymentMethod: 'CASH' }) });
+      setPaymentChoiceOpen(false);
+      setDraftOrder(null);
+      setCart({});
+      setNote('');
+      await loadHistory();
+      setSuccessPopup({ kind: 'cash', order });
+    } catch (err) {
+      setMessage(err.message || 'Không thể tạo đơn tiền mặt');
+    }
   }
 
   async function chooseTransfer() {
     if (!draftOrder) return;
-    const intent = await api('/api/public/payment-intents', { method: 'POST', body: JSON.stringify(draftOrder) });
-    setPaymentChoiceOpen(false); setTransferIntent(intent.intent); setDraftOrder(null);
+    try {
+      const result = await api('/api/public/payment-intents', { method: 'POST', body: JSON.stringify(draftOrder) });
+      const intent = result?.intent || result;
+
+      if (!intent || typeof intent !== 'object') {
+        throw new Error('Phản hồi thanh toán không hợp lệ');
+      }
+
+      setPaymentChoiceOpen(false);
+      setTransferIntent(intent);
+      setDraftOrder(null);
+    } catch (err) {
+      setMessage(err.message || 'Không thể tạo yêu cầu chuyển khoản');
+    }
   }
 
   async function cancelOrder(orderId) {
