@@ -144,10 +144,15 @@ router.post('/payment-intents', async (req, res, next) => {
     const costTotal = cart.reduce((sum, item) => sum + item.lineCost, 0);
     const date = businessDate();
     const referenceCode = buildPayosIntentReferenceCode(date);
+    const payosItems = cart.map((item) => ({
+      name: String(item.name || 'Mon').slice(0, 25),
+      quantity: item.quantity,
+      price: item.price
+    }));
     let payment;
 
     try {
-      payment = await createPayosLink({ amount: subtotal, referenceCode });
+      payment = await createPayosLink({ amount: subtotal, referenceCode, items: payosItems });
     } catch (error) {
       if (typeof error?.message === 'string' && (
         error.message.includes('Thiếu cấu hình PayOS') ||
