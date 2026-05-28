@@ -27,6 +27,45 @@ generate_token() {
   tr -dc 'A-Za-z0-9' </dev/urandom | head -c "$1"
 }
 
+load_env_file() {
+  local env_path="$1"
+  [ -f "${env_path}" ] || return 0
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      ''|\#*) continue ;;
+    esac
+
+    local key value
+    key="${line%%=*}"
+    value="${line#*=}"
+
+    case "$value" in
+      '"'*) value="${value#\"}" ;;
+    esac
+    case "$value" in
+      *'"') value="${value%\"}" ;;
+    esac
+
+    case "$key" in
+      POSTGRES_DB) POSTGRES_DB="$value" ;;
+      POSTGRES_USER) POSTGRES_USER="$value" ;;
+      POSTGRES_PASSWORD) POSTGRES_PASSWORD="$value" ;;
+      JWT_SECRET) JWT_SECRET="$value" ;;
+      STORE_NAME) STORE_NAME="$value" ;;
+      PAYOS_CLIENT_ID) PAYOS_CLIENT_ID="$value" ;;
+      PAYOS_API_KEY) PAYOS_API_KEY="$value" ;;
+      PAYOS_CHECKSUM_KEY) PAYOS_CHECKSUM_KEY="$value" ;;
+      PAYOS_BASE_URL) PAYOS_BASE_URL="$value" ;;
+      SEPAY_ENABLED) SEPAY_ENABLED="$value" ;;
+      SEPAY_API_URL) SEPAY_API_URL="$value" ;;
+      MERCHANT_ID) MERCHANT_ID="$value" ;;
+      SECRET_KEY) SECRET_KEY="$value" ;;
+      PRINTER_ENABLED) PRINTER_ENABLED="$value" ;;
+    esac
+  done < "${env_path}"
+}
+
 resolve_public_ip() {
   curl -fs4 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}'
 }
@@ -60,16 +99,16 @@ POSTGRES_USER=${POSTGRES_USER}
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
 JWT_SECRET=${JWT_SECRET}
-STORE_NAME=${STORE_NAME}
+STORE_NAME="${STORE_NAME}"
 FRONTEND_URL=https://${WEB_DOMAIN}
 BACKEND_URL=https://${API_DOMAIN}
 PORT=4000
 PAYOS_CLIENT_ID=${PAYOS_CLIENT_ID}
 PAYOS_API_KEY=${PAYOS_API_KEY}
 PAYOS_CHECKSUM_KEY=${PAYOS_CHECKSUM_KEY}
-PAYOS_BASE_URL=
-SEPAY_ENABLED=true
-SEPAY_API_URL=https://userapi.sepay.vn/v2
+PAYOS_BASE_URL=${PAYOS_BASE_URL}
+SEPAY_ENABLED=${SEPAY_ENABLED}
+SEPAY_API_URL=${SEPAY_API_URL}
 MERCHANT_ID=${MERCHANT_ID}
 SECRET_KEY=${SECRET_KEY}
 SEPAY_ACCOUNT_NUMBER=
@@ -166,19 +205,8 @@ if [ ! -f "${APP_DIR}/deploy/env/backend.env" ] && [ -f "${APP_DIR}/deploy/env/b
   cp "${APP_DIR}/deploy/env/backend.env.example" "${APP_DIR}/deploy/env/backend.env"
 fi
 
-if [ -f "${APP_DIR}/deploy/env/backend.env" ]; then
-  set -a
-  # shellcheck disable=SC1090
-  . "${APP_DIR}/deploy/env/backend.env"
-  set +a
-fi
-
-if [ -f "${APP_DIR}/backend/.env" ]; then
-  set -a
-  # shellcheck disable=SC1090
-  . "${APP_DIR}/backend/.env"
-  set +a
-fi
+load_env_file "${APP_DIR}/deploy/env/backend.env"
+load_env_file "${APP_DIR}/backend/.env"
 
 POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-$(generate_token 24)}"
 JWT_SECRET="${JWT_SECRET:-$(generate_token 48)}"
