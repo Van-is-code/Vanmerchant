@@ -257,6 +257,10 @@ if [ -n "${LETSENCRYPT_EMAIL}" ]; then
     -m "${LETSENCRYPT_EMAIL}" \
     -d "${WEB_DOMAIN}" -d "${API_DOMAIN}" || true
   systemctl reload nginx || true
+else
+  echo "==> Skip SSL issuance (LETSENCRYPT_EMAIL is empty)"
+  echo "    To enable HTTPS now, rerun with:"
+  echo "    LETSENCRYPT_EMAIL=you@example.com bash scripts/vps_bootstrap_deploy.sh"
 fi
 
 echo "==> Done"
