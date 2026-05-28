@@ -6,9 +6,9 @@ APP_DIR="${APP_DIR:-/var/www/vanmerchant}"
 BRANCH="${BRANCH:-master}"
 API_DOMAIN="${API_DOMAIN:-apitranhalam.uyentoan.studio}"
 WEB_DOMAIN="${WEB_DOMAIN:-tranhalam.uyentoan.studio}"
-POSTGRES_DB="${POSTGRES_DB:-vanmerchant}"
-POSTGRES_USER="${POSTGRES_USER:-postgres}"
-POSTGRES_PASSWORD="${POSTGRES_PASSWORD:}"
+POSTGRES_DB="${POSTGRES_DB:-tranhalam}"
+POSTGRES_USER="${POSTGRES_USER:-tranhalam}"
+POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-tranhalam}"
 JWT_SECRET="${JWT_SECRET:-}"
 STORE_NAME="${STORE_NAME:-Van Merchant}"
 PAYOS_CLIENT_ID="${PAYOS_CLIENT_ID:-}"
@@ -55,6 +55,9 @@ write_backend_env() {
   local env_file="${APP_DIR}/deploy/env/backend.env"
   mkdir -p "$(dirname "${env_file}")"
   cat > "${env_file}" <<EOF
+POSTGRES_DB=${POSTGRES_DB}
+POSTGRES_USER=${POSTGRES_USER}
+POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
 JWT_SECRET=${JWT_SECRET}
 STORE_NAME=${STORE_NAME}
@@ -156,6 +159,11 @@ else
   git -C "${APP_DIR}" fetch origin
   git -C "${APP_DIR}" checkout "${BRANCH}"
   git -C "${APP_DIR}" reset --hard "origin/${BRANCH}"
+fi
+
+if [ ! -f "${APP_DIR}/deploy/env/backend.env" ] && [ -f "${APP_DIR}/deploy/env/backend.env.example" ]; then
+  mkdir -p "${APP_DIR}/deploy/env"
+  cp "${APP_DIR}/deploy/env/backend.env.example" "${APP_DIR}/deploy/env/backend.env"
 fi
 
 if [ -f "${APP_DIR}/deploy/env/backend.env" ]; then

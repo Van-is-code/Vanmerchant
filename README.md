@@ -121,6 +121,12 @@ Sau lần đầu, chỉnh secrets tại:
 
 - `deploy/env/backend.env`
 
+PostgreSQL mặc định đã được set đúng theo yêu cầu của bạn:
+
+- user: `tranhalam`
+- password: `tranhalam`
+- db: `tranhalam`
+
 Rồi chạy lại script để apply:
 
 ```bash

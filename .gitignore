@@ -2,5 +2,12 @@ node_modules/
 dist/
 .env
 backend/.env
+backend/Dockerfile
+frontend/Dockerfile
+deploy/env/backend.env
 backend/prisma/dev.db
 backend/prisma/dev.db-journal
+rundocker/
+scripts/
+run_all.ps1
+deploy/

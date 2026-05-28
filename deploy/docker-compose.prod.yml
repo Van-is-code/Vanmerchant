@@ -4,13 +4,13 @@ services:
     container_name: vanmerchant-postgres
     restart: always
     environment:
-      POSTGRES_DB: vanmerchant
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vanmerchant_change_me}
+      POSTGRES_DB: ${POSTGRES_DB:-tranhalam}
+      POSTGRES_USER: ${POSTGRES_USER:-tranhalam}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tranhalam}
     volumes:
       - vanmerchant_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d vanmerchant"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tranhalam} -d ${POSTGRES_DB:-tranhalam}"]
       interval: 10s
       timeout: 5s
       retries: 10
