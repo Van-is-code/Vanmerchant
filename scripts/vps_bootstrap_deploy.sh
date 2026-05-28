@@ -129,7 +129,6 @@ cleanup_nginx_sites() {
   rm -f /etc/nginx/sites-enabled/vanmerchant
   rm -f /etc/nginx/sites-enabled/vanmerchant.conf
   rm -f /etc/nginx/sites-available/vanmerchant
-  rm -f /etc/nginx/sites-available/vanmerchant.conf
 }
 
 write_nginx_config() {
