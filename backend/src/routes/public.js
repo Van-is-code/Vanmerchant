@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../db.js';
 import { calculateCart, createOrderFromCart, businessDate } from '../services/order-service.js';
-import { createSepayLink, buildSepayIntentReferenceCode } from '../services/sepay-service.js';
+import { createPayosLink, buildPayosIntentReferenceCode } from '../services/payos-service.js';
 import { broadcastDataChange } from '../services/realtime.js';
 
 const router = Router();
@@ -20,7 +20,7 @@ router.get('/tables/:qrCode', async (req, res, next) => {
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
       include: {
         items: {
-          where: { active: true },
+          where: { active: true, hidden: false },
           orderBy: { name: 'asc' }
         }
       }
@@ -143,8 +143,8 @@ router.post('/payment-intents', async (req, res, next) => {
     const subtotal = cart.reduce((sum, item) => sum + item.lineTotal, 0);
     const costTotal = cart.reduce((sum, item) => sum + item.lineCost, 0);
     const date = businessDate();
-    const referenceCode = buildSepayIntentReferenceCode(date);
-    const payment = await createSepayLink({ subtotal, sepayReferenceCode: referenceCode });
+    const referenceCode = buildPayosIntentReferenceCode(date);
+    const payment = await createPayosLink({ amount: subtotal, referenceCode });
 
     const intent = await prisma.paymentIntent.create({
       data: {
@@ -160,7 +160,9 @@ router.post('/payment-intents', async (req, res, next) => {
         costTotal,
         note: data.note,
         items: cart,
-        sepayCheckoutUrl: payment.checkoutUrl
+        payosOrderCode: payment.orderCode,
+        payosCheckoutUrl: payment.checkoutUrl,
+        payosQrCode: payment.qrDataUrl
       }
     });
 
@@ -198,12 +200,12 @@ router.get('/payment-intents/:id', async (req, res, next) => {
     return res.json({
       intent: {
         ...intent,
-        qrDataUrl: intent.sepayCheckoutUrl
+        qrDataUrl: intent.payosQrCode
       },
       order,
       orderId: intent.orderId,
-      qrDataUrl: intent.sepayCheckoutUrl,
-      checkoutUrl: intent.sepayCheckoutUrl
+      qrDataUrl: intent.payosQrCode,
+      checkoutUrl: intent.payosCheckoutUrl
     });
   } catch (error) {
     return next(error);
@@ -233,8 +235,6 @@ router.delete('/payment-intents/:id', async (req, res, next) => {
     return next(error);
   }
 });
-
-router.post('/orders/:id/sepay', async (req, res) => res.status(410).json({ message: 'Luồng này đã đổi sang payment-intents, hãy dùng endpoint mới' }));
 
 router.patch('/orders/:id/cancel', async (req, res, next) => {
   try {

@@ -20,9 +20,11 @@ const allowedOrigins = new Set([
   'http://localhost:5173',
   'http://localhost:2245',
   'http://localhost:2246',
+  'http://localhost:2247',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:2245',
-  'http://127.0.0.1:2246'
+  'http://127.0.0.1:2246',
+  'http://127.0.0.1:2247'
 ]);
 
 app.use(cors({

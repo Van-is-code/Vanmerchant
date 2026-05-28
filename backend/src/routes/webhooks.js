@@ -2,31 +2,35 @@ import { Router } from 'express';
 import { prisma } from '../db.js';
 import { createPaidOrderFromIntent, markOrderPaid } from '../services/order-service.js';
 import { printKitchenTicket } from '../services/print-service.js';
-import { verifySepayWebhook } from '../services/sepay-service.js';
+import { verifyPayosWebhook } from '../services/payos-service.js';
 import { broadcastDataChange } from '../services/realtime.js';
 
 const router = Router();
 
-router.post('/sepay', async (req, res, next) => {
+router.post('/payos', async (req, res, next) => {
   try {
-    const data = verifySepayWebhook(req.body, req.headers);
+    const data = await verifyPayosWebhook(req.body);
+    const isPaid = String(data.code || '').trim() === '00';
+    const transactionId = String(data.paymentLinkId || data.reference || data.orderCode || '').trim();
 
-    if (!data.transactionId) {
+    if (!data.orderCode) {
       return res.status(200).json({ success: true });
     }
 
-    const processedIntent = await prisma.paymentIntent.findFirst({
-      where: { sepayTransactionId: data.transactionId }
-    });
-    if (processedIntent) {
-      return res.status(200).json({ success: true });
+    if (transactionId) {
+      const processedIntent = await prisma.paymentIntent.findFirst({
+        where: { payosTransactionId: transactionId }
+      });
+      if (processedIntent) {
+        return res.status(200).json({ success: true });
+      }
     }
 
     const intent = await prisma.paymentIntent.findUnique({
-      where: { referenceCode: data.referenceCode }
+      where: { payosOrderCode: data.orderCode }
     });
     if (intent) {
-      if (data.success) {
+      if (isPaid) {
         const paid = await prisma.$transaction(async (tx) => {
           const order = intent.orderId
             ? await tx.order.findUnique({ where: { id: intent.orderId } })
@@ -40,7 +44,7 @@ router.post('/sepay', async (req, res, next) => {
             where: { id: intent.id },
             data: {
               status: 'PAID',
-              sepayTransactionId: data.transactionId,
+              payosTransactionId: transactionId || null,
               orderId: order.id
             }
           });
@@ -62,7 +66,7 @@ router.post('/sepay', async (req, res, next) => {
           where: { id: intent.id },
           data: {
             status: 'FAILED',
-            sepayTransactionId: data.transactionId
+            payosTransactionId: transactionId || null
           }
         });
         broadcastDataChange('payment-intents', {
@@ -76,17 +80,17 @@ router.post('/sepay', async (req, res, next) => {
     }
 
     const order = await prisma.order.findUnique({
-      where: { sepayReferenceCode: data.referenceCode }
+      where: { payosOrderCode: data.orderCode }
     });
     if (!order) {
       return res.status(200).json({ success: true });
     }
 
-    if (data.success) {
+    if (isPaid) {
       const paid = await markOrderPaid(order.id);
       await prisma.order.update({
         where: { id: paid.id },
-        data: { sepayTransactionId: data.transactionId }
+        data: { payosTransactionId: transactionId || null }
       });
       await printKitchenTicket(paid);
       broadcastDataChange('orders', { action: 'paid', orderId: paid.id });
@@ -101,10 +105,12 @@ router.post('/sepay', async (req, res, next) => {
 
     return res.status(200).json({ success: true });
   } catch (error) {
+    if (error?.name === 'WebhookError') {
+      return res.status(400).json({ message: error.message });
+    }
+
     return next(error);
   }
 });
-
-router.post('/payos', async (req, res) => res.status(410).json({ message: 'PayOS đã được tắt, hãy dùng SePay' }));
 
 export default router;

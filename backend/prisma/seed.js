@@ -4,25 +4,65 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
-  const ownerPasswordHash = await bcrypt.hash('123456', 10);
-  const adminPasswordHash = await bcrypt.hash('admin123', 10);
-
-  await prisma.user.upsert({
-    where: { email: 'admin@vanmerchant.local' },
-    update: { role: 'ADMIN', passwordHash: adminPasswordHash },
-    create: { name: 'Admin', email: 'admin@vanmerchant.local', passwordHash: adminPasswordHash, role: 'ADMIN' }
+  // Tạo Admin user (mặc định phone)
+  const adminPin = await bcrypt.hash('000000', 10);
+  const adminUser = await prisma.user.upsert({
+    where: { phone: '0862215231' },
+    update: { role: 'ADMIN' },
+    create: {
+      name: 'Admin',
+      phone: '0862215231',
+      role: 'ADMIN',
+      pin: adminPin // Test PIN: 000000
+    }
   });
 
+  // Tạo test device cho admin để không cần PIN
+  const testDeviceId = 'dev_test_browser_12345678';
+  await prisma.userDevice.upsert({
+    where: { userId_deviceId: { userId: adminUser.id, deviceId: testDeviceId } },
+    update: { lastUsedAt: new Date() },
+    create: {
+      userId: adminUser.id,
+      deviceId: testDeviceId,
+      deviceName: 'Test Browser'
+    }
+  });
+
+  // Keep legacy email-based login for backward compatibility
+  const legacyAdminPasswordHash = await bcrypt.hash('admin123', 10);
+  await prisma.user.upsert({
+    where: { email: 'admin@vanmerchant.local' },
+    update: { role: 'ADMIN', passwordHash: legacyAdminPasswordHash },
+    create: {
+      name: 'Admin (Legacy)',
+      email: 'admin@vanmerchant.local',
+      passwordHash: legacyAdminPasswordHash,
+      role: 'ADMIN'
+    }
+  });
+
+  const legacyOwnerPasswordHash = await bcrypt.hash('123456', 10);
   await prisma.user.upsert({
     where: { email: 'owner@vanmerchant.local' },
-    update: {},
-    create: { name: 'Chu quan', email: 'owner@vanmerchant.local', passwordHash: ownerPasswordHash, role: 'OWNER' }
+    update: { role: 'OWNER' },
+    create: {
+      name: 'Owner (Legacy)',
+      email: 'owner@vanmerchant.local',
+      passwordHash: legacyOwnerPasswordHash,
+      role: 'OWNER'
+    }
   });
 
   await prisma.user.upsert({
     where: { email: 'staff@vanmerchant.local' },
-    update: {},
-    create: { name: 'Nhan vien', email: 'staff@vanmerchant.local', passwordHash: ownerPasswordHash, role: 'STAFF' }
+    update: { role: 'STAFF' },
+    create: {
+      name: 'Staff (Legacy)',
+      email: 'staff@vanmerchant.local',
+      passwordHash: legacyOwnerPasswordHash,
+      role: 'STAFF'
+    }
   });
 
   const drinks = await prisma.category.upsert({

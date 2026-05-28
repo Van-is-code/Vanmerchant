@@ -3,7 +3,13 @@ import { config } from '../config.js';
 
 export function signUser(user) {
   return jwt.sign(
-    { sub: user.id, role: user.role, name: user.name, email: user.email },
+    {
+      sub: user.id,
+      role: user.role,
+      name: user.name,
+      email: user.email,
+      phone: user.phone
+    },
     config.jwtSecret,
     { expiresIn: '7d' }
   );

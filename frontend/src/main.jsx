@@ -8,6 +8,8 @@ import {
   ClipboardList,
   Download,
   ExternalLink,
+  Eye,
+  EyeOff,
   History,
   ImagePlus,
   LogOut,
@@ -28,7 +30,24 @@ import {
   Info,
   Phone,
   ShoppingCart,
+  Calendar,
+  TrendingUp,
+  ShoppingBasket,
 } from 'lucide-react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+  Sector,
+} from 'recharts';
 import { API_BASE, api, getUser, logout, money, setSession, updateStoredUser } from './api.js';
 import './styles.css';
 
@@ -73,7 +92,7 @@ function CustomerOrder({ qrCode }) {
   const [note, setNote]                 = useState('');
   const [history, setHistory]           = useState([]);
   const [message, setMessage]           = useState('');
-  const [activeTab, setActiveTab]       = useState('menu');   // 'menu' | 'cart' | 'history'
+  const [activeTab, setActiveTab]       = useState('menu');
   const [historyPage, setHistoryPage]   = useState(1);
   const [paymentChoiceOpen, setPaymentChoiceOpen] = useState(false);
   const [draftOrder, setDraftOrder]     = useState(null);
@@ -91,10 +110,7 @@ function CustomerOrder({ qrCode }) {
   async function resolveTransferSuccess(result) {
     const latestOrders = await loadHistory();
     const paidOrder = result.order || latestOrders.find((o) => o.paymentStatus === 'PAID');
-    if (!paidOrder) {
-      return false;
-    }
-
+    if (!paidOrder) return false;
     setTransferIntent(null);
     setDraftOrder(null);
     setCart({});
@@ -105,75 +121,49 @@ function CustomerOrder({ qrCode }) {
   }
 
   async function syncTransferIntent(intentId) {
-    if (!intentId) {
-      return null;
-    }
-
+    if (!intentId) return null;
     const result = await api(`/api/public/payment-intents/${intentId}`);
     setTransferIntent((current) => ({ ...current, ...result.intent }));
-
-    if (result.intent.status === 'PAID') {
-      await resolveTransferSuccess(result);
-    }
-
+    if (result.intent.status === 'PAID') await resolveTransferSuccess(result);
     if (['FAILED', 'CANCELLED'].includes(result.intent.status)) {
       setTransferIntent(null);
       setDraftOrder(null);
       setInfoPopup({ title: 'Chưa tạo đơn', body: 'Nếu chưa thanh toán thì đơn hàng chưa được tạo.' });
     }
-
     return result;
   }
 
   useRealtimeUpdates(['menu', 'tables', 'orders', 'payment-intents'], (payload) => {
     if (payload.resource === 'payment-intents' && transferIntent?.id && payload.intentId === transferIntent.id) {
-      if (payload.action === 'paid') {
-        syncTransferIntent(payload.intentId).catch(() => {});
-      } else if (payload.action === 'failed') {
+      if (payload.action === 'paid') syncTransferIntent(payload.intentId).catch(() => {});
+      else if (payload.action === 'failed') {
         setTransferIntent(null);
         setDraftOrder(null);
-        setInfoPopup({
-          title: 'Thanh toán thất bại',
-          body: 'Giao dịch chưa được ghi nhận, nên đơn hàng chưa được tạo.'
-        });
+        setInfoPopup({ title: 'Thanh toán thất bại', body: 'Giao dịch chưa được ghi nhận, nên đơn hàng chưa được tạo.' });
       }
       return;
     }
-
     if (cartLines.length === 0) loadCatalog();
     if (authorized && phone.length >= 8) loadHistory();
   });
 
   useEffect(() => {
     if (!transferIntent?.id) return undefined;
-
     let cancelled = false;
     let timerId = null;
-
     const pollTransferStatus = async () => {
       try {
         const result = await syncTransferIntent(transferIntent.id);
         if (cancelled) return;
-
         const status = result?.intent?.status;
-        if (!status || ['PAID', 'FAILED', 'CANCELLED'].includes(status)) {
-          return;
-        }
-
+        if (!status || ['PAID', 'FAILED', 'CANCELLED'].includes(status)) return;
         timerId = window.setTimeout(pollTransferStatus, 3000);
       } catch {
-        if (!cancelled) {
-          timerId = window.setTimeout(pollTransferStatus, 5000);
-        }
+        if (!cancelled) timerId = window.setTimeout(pollTransferStatus, 5000);
       }
     };
-
     pollTransferStatus();
-
-    return () => {
-      cancelled = true;
-      if (timerId) window.clearTimeout(timerId);
-    };
+    return () => { cancelled = true; if (timerId) window.clearTimeout(timerId); };
   }, [transferIntent?.id]);
 
   const loadHistory = () => {
@@ -187,7 +177,6 @@ function CustomerOrder({ qrCode }) {
 
   useEffect(() => { loadHistory(); }, [authorized, phone]);
 
-  // Derived
   const items = categories.flatMap((c) => c.items);
   const cartLines = Object.entries(cart)
     .map(([id, qty]) => ({ item: items.find((i) => i.id === id), quantity: qty }))
@@ -195,7 +184,6 @@ function CustomerOrder({ qrCode }) {
   const cartCount = cartLines.reduce((s, l) => s + l.quantity, 0);
   const total = cartLines.reduce((s, l) => s + l.item.price * l.quantity, 0);
 
-  // History pagination
   const totalPages = Math.max(1, Math.ceil(history.length / HISTORY_PER_PAGE));
   const historySlice = history.slice((historyPage - 1) * HISTORY_PER_PAGE, historyPage * HISTORY_PER_PAGE);
 
@@ -250,10 +238,10 @@ function CustomerOrder({ qrCode }) {
   }
 
   function downloadQr() {
-    const url = transferIntent?.qrDataUrl || transferIntent?.sepayCheckoutUrl;
+    const url = transferIntent?.qrDataUrl || transferIntent?.payosCheckoutUrl;
     if (!url) return;
     const a = document.createElement('a');
-    a.href = url; a.download = `sepay-${transferIntent.referenceCode || 'qr'}.png`;
+    a.href = url; a.download = `payos-${transferIntent.referenceCode || 'qr'}.png`;
     a.rel = 'noopener noreferrer'; document.body.append(a); a.click(); a.remove();
   }
 
@@ -269,15 +257,7 @@ function CustomerOrder({ qrCode }) {
           <form className="input-row" onSubmit={enterPhone}>
             <div style={{ position: 'relative' }}>
               <Phone size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-3)' }} />
-              <input
-                className="field"
-                style={{ paddingLeft: 36 }}
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="Số điện thoại"
-                type="tel"
-                inputMode="numeric"
-              />
+              <input className="field" style={{ paddingLeft: 36 }} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Số điện thoại" type="tel" inputMode="numeric" />
             </div>
             <button className="btn btn-primary btn-lg btn-full" type="submit">Tiếp tục →</button>
           </form>
@@ -288,33 +268,23 @@ function CustomerOrder({ qrCode }) {
 
   return (
     <div className="customer-shell">
-      {/* Top bar */}
       <header className="customer-topbar">
         <Store size={20} style={{ opacity: .85 }} />
         <span className="table-name">{table?.name || 'Gọi món'}</span>
         <span className="phone-chip">📱 {phone}</span>
       </header>
-
-      {/* Tab bar */}
       <div className="tab-bar">
-        <button className={`tab-btn ${activeTab === 'menu' ? 'active' : ''}`} onClick={() => setActiveTab('menu')}>
-          <Utensils size={16} /> Thực đơn
-        </button>
+        <button className={`tab-btn ${activeTab === 'menu' ? 'active' : ''}`} onClick={() => setActiveTab('menu')}><Utensils size={16} /> Thực đơn</button>
         <button className={`tab-btn ${activeTab === 'cart' ? 'active' : ''}`} onClick={() => setActiveTab('cart')}>
-          <ShoppingCart size={16} /> Giỏ hàng
-          {cartCount > 0 && <span className="tab-badge">{cartCount}</span>}
+          <ShoppingCart size={16} /> Giỏ hàng{cartCount > 0 && <span className="tab-badge">{cartCount}</span>}
         </button>
         <button className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>
           <History size={16} /> Đơn của tôi
-          {history.filter((o) => o.status === 'NEW').length > 0 && (
-            <span className="tab-badge">{history.filter((o) => o.status === 'NEW').length}</span>
-          )}
+          {history.filter((o) => o.status === 'NEW').length > 0 && <span className="tab-badge">{history.filter((o) => o.status === 'NEW').length}</span>}
         </button>
       </div>
-
       {message && <div className="notice" style={{ margin: '10px 16px 0' }}>{message}</div>}
 
-      {/* MENU TAB */}
       {activeTab === 'menu' && (
         <>
           <div className="customer-menu-tab">
@@ -323,23 +293,16 @@ function CustomerOrder({ qrCode }) {
                 <h2>{cat.name}</h2>
                 {cat.items.map((item) => (
                   <div className="menu-item-row" key={item.id} style={{ marginBottom: 8 }}>
-                    <img
-                      src={item.imageUrl || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=200&q=60'}
-                      alt={item.name}
-                    />
+                    <img src={item.imageUrl || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=200&q=60'} alt={item.name} />
                     <div className="item-body">
                       <div className="item-name">{item.name}</div>
                       {item.description && <div className="item-desc">{item.description}</div>}
                       <div className="item-price">{money(item.price)}</div>
                     </div>
                     <div className="stepper">
-                      <button className="stepper-btn" onClick={() => changeQty(item.id, -1)} disabled={!cart[item.id]}>
-                        <Minus size={14} />
-                      </button>
+                      <button className="stepper-btn" onClick={() => changeQty(item.id, -1)} disabled={!cart[item.id]}><Minus size={14} /></button>
                       <span className="stepper-count">{cart[item.id] || 0}</span>
-                      <button className="stepper-btn add" onClick={() => changeQty(item.id, 1)}>
-                        <Plus size={14} />
-                      </button>
+                      <button className="stepper-btn add" onClick={() => changeQty(item.id, 1)}><Plus size={14} /></button>
                     </div>
                   </div>
                 ))}
@@ -352,23 +315,16 @@ function CustomerOrder({ qrCode }) {
                 <span className="cart-summary-text"><b>{cartCount}</b> món đã chọn</span>
                 <span className="cart-total-row">Tổng: <span className="total-amt">{money(total)}</span></span>
               </div>
-              <button className="btn btn-primary btn-full btn-lg" onClick={() => setActiveTab('cart')}>
-                Xem giỏ hàng & đặt →
-              </button>
+              <button className="btn btn-primary btn-full btn-lg" onClick={() => setActiveTab('cart')}>Xem giỏ hàng & đặt →</button>
             </div>
           )}
         </>
       )}
 
-      {/* CART TAB */}
       {activeTab === 'cart' && (
         <div className="cart-tab">
           {cartLines.length === 0 ? (
-            <div className="cart-empty">
-              <ShoppingBag size={48} />
-              <p>Giỏ hàng trống.<br />Quay lại Thực đơn để chọn món.</p>
-              <button className="btn btn-ghost mt-2" onClick={() => setActiveTab('menu')}>← Xem thực đơn</button>
-            </div>
+            <div className="cart-empty"><ShoppingBag size={48} /><p>Giỏ hàng trống.<br />Quay lại Thực đơn để chọn món.</p><button className="btn btn-ghost mt-2" onClick={() => setActiveTab('menu')}>← Xem thực đơn</button></div>
           ) : (
             <>
               <div className="cart-lines">
@@ -384,80 +340,45 @@ function CustomerOrder({ qrCode }) {
                   </div>
                 ))}
               </div>
-
               <div className="cart-note">
                 <label>Ghi chú cho quán</label>
                 <textarea className="field" value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: ít cay, không hành..." />
               </div>
-
               <div className="cart-summary-card">
                 {cartLines.map((line) => (
-                  <div className="row" key={line.item.id}>
-                    <span>{line.item.name} × {line.quantity}</span>
-                    <span>{money(line.item.price * line.quantity)}</span>
-                  </div>
+                  <div className="row" key={line.item.id}><span>{line.item.name} × {line.quantity}</span><span>{money(line.item.price * line.quantity)}</span></div>
                 ))}
-                <div className="row total-row">
-                  <span>Tổng cộng</span>
-                  <span className="total-amt">{money(total)}</span>
-                </div>
+                <div className="row total-row"><span>Tổng cộng</span><span className="total-amt">{money(total)}</span></div>
               </div>
-
-              <button className="btn btn-primary btn-full btn-lg" onClick={submitOrder}>
-                Gọi món ngay
-              </button>
+              <button className="btn btn-primary btn-full btn-lg" onClick={submitOrder}>Gọi món ngay</button>
             </>
           )}
         </div>
       )}
 
-      {/* HISTORY TAB */}
       {activeTab === 'history' && (
         <div className="history-tab">
           {history.length === 0 ? (
-            <div className="cart-empty">
-              <History size={48} />
-              <p>Chưa có đơn nào.<br />Hãy đặt món đầu tiên của bạn!</p>
-            </div>
+            <div className="cart-empty"><History size={48} /><p>Chưa có đơn nào.<br />Hãy đặt món đầu tiên của bạn!</p></div>
           ) : (
             <>
               {historySlice.map((order) => (
                 <div className="history-card" key={order.id}>
                   <div className="history-card-head">
-                    <div className="order-meta">
-                      <b>#{order.dailySequence} — {order.table?.name}</b>
-                      <div className="time">{order.createdAt ? new Date(order.createdAt).toLocaleString('vi-VN') : ''}</div>
-                    </div>
-                    <div className="price-col">
-                      <div className="amt">{money(order.subtotal)}</div>
-                    </div>
+                    <div className="order-meta"><b>#{order.dailySequence} — {order.table?.name}</b><div className="time">{order.createdAt ? new Date(order.createdAt).toLocaleString('vi-VN') : ''}</div></div>
+                    <div className="price-col"><div className="amt">{money(order.subtotal)}</div></div>
                   </div>
-                  <div className="history-badges">
-                    <StatusBadge text={order.status} />
-                    <StatusBadge text={order.paymentStatus} />
-                  </div>
-                  <div className="history-items">
-                    {order.items.map((item) => (
-                      <span key={item.id}>{item.quantity}× {item.name}</span>
-                    ))}
-                  </div>
-                  {order.status === 'NEW' && (
-                    <button className="btn btn-danger btn-full mt-2" style={{ marginTop: 10 }} onClick={() => cancelOrder(order.id)}>
-                      <Trash2 size={14} /> Hủy đơn đang chờ
-                    </button>
-                  )}
+                  <div className="history-badges"><StatusBadge text={order.status} /><StatusBadge text={order.paymentStatus} /></div>
+                  <div className="history-items">{order.items.map((item) => (<span key={item.id}>{item.quantity}× {item.name}</span>))}</div>
+                  {order.status === 'NEW' && (<button className="btn btn-danger btn-full mt-2" style={{ marginTop: 10 }} onClick={() => cancelOrder(order.id)}><Trash2 size={14} /> Hủy đơn đang chờ</button>)}
                 </div>
               ))}
-
-              {totalPages > 1 && (
-                <Pagination page={historyPage} total={totalPages} onChange={setHistoryPage} />
-              )}
+              {totalPages > 1 && <Pagination page={historyPage} total={totalPages} onChange={setHistoryPage} />}
             </>
           )}
         </div>
       )}
 
-      {/* MODALS */}
       {paymentChoiceOpen && draftOrder && (
         <div className="modal-backdrop">
           <div className="modal">
@@ -480,7 +401,7 @@ function CustomerOrder({ qrCode }) {
             <p>Sau khi ngân hàng xác nhận, đơn hàng mới được tạo tự động.</p>
             {transferIntent.qrDataUrl && (
               <div className="payment-qr-box">
-                <img src={transferIntent.qrDataUrl} alt="SePay QR" />
+                <img src={transferIntent.qrDataUrl} alt="PayOS QR" />
                 <p>Đang chờ xác nhận ngân hàng…</p>
               </div>
             )}
@@ -497,15 +418,9 @@ function CustomerOrder({ qrCode }) {
           <div className="modal">
             <div className="modal-icon success"><Check size={24} /></div>
             <h2>Gọi món thành công!</h2>
-            <p>
-              {successPopup.kind === 'cash'
-                ? `Đơn #${successPopup.order.dailySequence} đã được tạo ngay — thanh toán khi nhận.`
-                : `Đơn #${successPopup.order.dailySequence} được tạo sau khi ngân hàng xác nhận chuyển khoản.`}
-            </p>
+            <p>{successPopup.kind === 'cash' ? `Đơn #${successPopup.order.dailySequence} đã được tạo ngay — thanh toán khi nhận.` : `Đơn #${successPopup.order.dailySequence} được tạo sau khi ngân hàng xác nhận chuyển khoản.`}</p>
             <div className="modal-actions">
-              <button className="btn btn-primary btn-full btn-lg" onClick={() => { setSuccessPopup(null); setActiveTab('history'); }}>
-                Xem đơn của tôi
-              </button>
+              <button className="btn btn-primary btn-full btn-lg" onClick={() => { setSuccessPopup(null); setActiveTab('history'); }}>Xem đơn của tôi</button>
               <button className="btn btn-ghost btn-full" onClick={() => setSuccessPopup(null)}>Tiếp tục gọi món</button>
             </div>
           </div>
@@ -518,9 +433,7 @@ function CustomerOrder({ qrCode }) {
             <div className="modal-icon warning"><Info size={24} /></div>
             <h2>{infoPopup.title}</h2>
             <p>{infoPopup.body}</p>
-            <div className="modal-actions">
-              <button className="btn btn-primary btn-full btn-lg" onClick={() => setInfoPopup(null)}>Đóng</button>
-            </div>
+            <div className="modal-actions"><button className="btn btn-primary btn-full btn-lg" onClick={() => setInfoPopup(null)}>Đóng</button></div>
           </div>
         </div>
       )}
@@ -528,24 +441,18 @@ function CustomerOrder({ qrCode }) {
   );
 }
 
-// ── Pagination ────────────────────────────────────────────
 function Pagination({ page, total, onChange }) {
   return (
     <div className="pagination">
-      <button className="page-btn" onClick={() => onChange(page - 1)} disabled={page === 1}>
-        <ChevronLeft size={14} />
-      </button>
+      <button className="page-btn" onClick={() => onChange(page - 1)} disabled={page === 1}><ChevronLeft size={14} /></button>
       {Array.from({ length: total }, (_, i) => i + 1).map((p) => (
         <button key={p} className={`page-btn ${p === page ? 'active' : ''}`} onClick={() => onChange(p)}>{p}</button>
       ))}
-      <button className="page-btn" onClick={() => onChange(page + 1)} disabled={page === total}>
-        <ChevronRight size={14} />
-      </button>
+      <button className="page-btn" onClick={() => onChange(page + 1)} disabled={page === total}><ChevronRight size={14} /></button>
     </div>
   );
 }
 
-// ── Status badge ──────────────────────────────────────────
 const STATUS_MAP = {
   NEW: 'Mới', PREPARING: 'Đang làm', DELIVERING: 'Đang giao',
   DELIVERED: 'Đã giao', CANCELLED: 'Đã hủy',
@@ -556,13 +463,12 @@ function StatusBadge({ text }) {
   return <span className={`badge badge-${key}`}>{STATUS_MAP[text] || text}</span>;
 }
 
-// ── Payment result ────────────────────────────────────────
 function PaymentResult() {
   return (
     <div className="result-page">
       <ReceiptText size={52} />
       <h1>Đã quay lại từ cổng thanh toán</h1>
-      <p>Quán sẽ nhận trạng thái chính thức từ webhook SePay. Nếu ngân hàng đã báo thành công, đơn sẽ tự chuyển sang đang làm.</p>
+      <p>Quán sẽ nhận trạng thái chính thức từ webhook PayOS. Nếu ngân hàng đã báo thành công, đơn sẽ tự chuyển sang đang làm.</p>
       <a href="/">← Về trang chính</a>
     </div>
   );
@@ -578,31 +484,71 @@ function BackOffice() {
 }
 
 function Login({ onLogin }) {
-  const [email, setEmail]       = useState('admin@vanmerchant.local');
-  const [password, setPassword] = useState('admin123');
-  const [error, setError]       = useState('');
+  const [phone, setPhone]           = useState('');
+  const [pin, setPin]               = useState('');
+  const [error, setError]           = useState('');
+  const [requiresPin, setRequiresPin] = useState(false);
+  const [loading, setLoading]       = useState(false);
+  const [displayPhone, setDisplayPhone] = useState('');
+
+  function getOrCreateDeviceId() {
+    let deviceId = localStorage.getItem('vanmerchant_device_id');
+    if (!deviceId) {
+      deviceId = 'dev_' + Math.random().toString(36).substr(2, 16);
+      localStorage.setItem('vanmerchant_device_id', deviceId);
+    }
+    return deviceId;
+  }
 
   async function submit(e) {
     e.preventDefault();
+    setError(''); setLoading(true);
     try {
-      const session = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
-      setSession(session);
-      onLogin(session.user);
+      const deviceId = getOrCreateDeviceId();
+      const response = await api('/api/auth/login-phone', { method: 'POST', body: JSON.stringify({ phone, deviceId }) });
+      if (response.requiresPin) { setDisplayPhone(response.phone); setRequiresPin(true); setPin(''); }
+      else { setSession(response); onLogin(response.user); }
     } catch (err) { setError(err.message); }
+    finally { setLoading(false); }
+  }
+
+  async function submitPin(e) {
+    e.preventDefault();
+    setError(''); setLoading(true);
+    try {
+      const deviceId = getOrCreateDeviceId();
+      const response = await api('/api/auth/verify-pin', { method: 'POST', body: JSON.stringify({ phone, deviceId, pin }) });
+      setSession(response); onLogin(response.user);
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); }
+  }
+
+  if (requiresPin) {
+    return (
+      <div className="login-page">
+        <form className="login-card" onSubmit={submitPin}>
+          <div className="logo-area"><ChefHat size={36} /><h1>Nhập Mã PIN</h1></div>
+          <p className="sub">Nhập mã PIN 6 chữ số (****{displayPhone})</p>
+          <input className="field" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="000000" maxLength="6" autoFocus disabled={loading} type="password" />
+          {error && <p className="notice notice-err">{error}</p>}
+          <button className="btn btn-primary btn-lg btn-full" type="submit" disabled={loading || pin.length !== 6}>{loading ? 'Đang xác minh...' : 'Xác minh'}</button>
+          <button className="btn btn-ghost btn-lg btn-full" type="button" onClick={() => { setRequiresPin(false); setPin(''); setError(''); }} disabled={loading}>Quay lại</button>
+        </form>
+      </div>
+    );
   }
 
   return (
     <div className="login-page">
       <form className="login-card" onSubmit={submit}>
-        <div className="logo-area">
-          <ChefHat size={36} />
-          <h1>VanMerchant POS</h1>
-        </div>
+        <div className="logo-area"><ChefHat size={36} /><h1>VanMerchant POS</h1></div>
         <p className="sub">Quản lý quán, đơn hàng & nhân sự</p>
-        <input className="field" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" type="email" />
-        <input className="field" value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="Mật khẩu" />
+        <div className="field-group">
+          <Phone size={18} />
+          <input className="field" value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))} placeholder="Số điện thoại" type="tel" autoFocus disabled={loading} />
+        </div>
         {error && <p className="notice notice-err">{error}</p>}
-        <button className="btn btn-primary btn-lg btn-full" type="submit">Đăng nhập</button>
+        <button className="btn btn-primary btn-lg btn-full" type="submit" disabled={loading || phone.length < 8}>{loading ? 'Đang xử lý...' : 'Đăng nhập'}</button>
       </form>
     </div>
   );
@@ -610,74 +556,53 @@ function Login({ onLogin }) {
 
 function DashboardShell({ user, onLogout, onUserChange }) {
   const canManage = ['OWNER', 'ADMIN'].includes(user.role);
+  const isAdmin = user.role === 'ADMIN';
   const [tab, setTab]           = useState(canManage ? 'overview' : 'orders');
   const [refreshToken, setRefresh] = useState(0);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const navItems = [
-    { id: 'overview',     label: 'Doanh thu',   hint: 'Xem doanh thu hôm nay', icon: <BarChart3 size={18} />,    hidden: !canManage },
-    { id: 'orders',       label: 'Đang làm',    hint: 'Đơn mới và đang nấu', icon: <ClipboardList size={18} /> },
-    { id: 'delivery',     label: 'Chờ giao',    hint: 'Đơn chuẩn bị giao', icon: <ReceiptText size={18} /> },
-    { id: 'history',      label: 'Lịch sử',     hint: 'Các đơn đã xử lý', icon: <History size={18} /> },
-    { id: 'menu',         label: 'Menu',        hint: 'Món ăn và giá bán', icon: <Utensils size={18} />,     hidden: !canManage },
-    { id: 'ingredients',  label: 'Nguyên liệu', hint: 'Tồn kho và giá vốn', icon: <Package size={18} />,  hidden: !canManage },
-    { id: 'tables',       label: 'Bàn & QR',    hint: 'Mã bàn và in QR', icon: <QrCode size={18} />,       hidden: !canManage },
-    { id: 'accounts',     label: 'Tài khoản',   hint: 'Quản lý nhân sự', icon: <Users size={18} />,        hidden: !canManage },
-  ].filter((n) => !n.hidden);
+    { id: 'overview',     label: 'Doanh thu',   hint: 'Xem doanh thu hôm nay', icon: <BarChart3 size={18} />,        visible: isAdmin },
+    { id: 'orders',       label: 'Đang làm',    hint: 'Đơn mới và đang nấu', icon: <ClipboardList size={18} />,     visible: true },
+    { id: 'delivery',     label: 'Chờ giao',    hint: 'Đơn chuẩn bị giao', icon: <ReceiptText size={18} />,         visible: true },
+    { id: 'unpaid',       label: 'Đơn chưa TT', hint: 'Các đơn chưa thanh toán', icon: <Banknote size={18} />,       visible: canManage },
+    { id: 'history',      label: 'Lịch sử',     hint: 'Các đơn đã xử lý', icon: <History size={18} />,             visible: true },
+    { id: 'menu',         label: 'Menu',        hint: 'Món ăn và giá bán', icon: <Utensils size={18} />,             visible: canManage },
+    { id: 'tables',       label: 'Bàn & QR',    hint: 'Mã bàn và in QR', icon: <QrCode size={18} />,                 visible: canManage },
+    { id: 'accounts',     label: 'Tài khoản',   hint: 'Quản lý nhân sự', icon: <Users size={18} />,                  visible: canManage },
+  ].filter((n) => n.visible);
 
   return (
     <div className="app-shell">
-      {/* Sidebar / mobile bottom nav */}
       <aside className="sidebar">
-        <div className="sidebar-brand">
-          <Store size={22} />
-          <span>VanMerchant</span>
-        </div>
+        <div className="sidebar-brand"><Store size={22} /><span>VanMerchant</span></div>
         <nav className="sidebar-nav">
           {navItems.map((n) => (
-            <button
-              key={n.id}
-              className={`nav-item ${tab === n.id ? 'active' : ''}`}
-              onClick={() => {
-                setTab(n.id);
-                setMobileNavOpen(false);
-              }}
-            >
-              {n.icon}
-              <span className="nav-label nav-label-desktop">{n.label}</span>
+            <button key={n.id} className={`nav-item ${tab === n.id ? 'active' : ''}`} onClick={() => { setTab(n.id); setMobileNavOpen(false); }}>
+              {n.icon}<span className="nav-label nav-label-desktop">{n.label}</span>
             </button>
           ))}
         </nav>
         <div className="sidebar-footer">
-          <button className="nav-item" onClick={onLogout} style={{ width: '100%' }}>
-            <LogOut size={18} /><span className="nav-label nav-label-desktop">Đăng xuất</span>
-          </button>
+          <button className="nav-item" onClick={onLogout} style={{ width: '100%' }}><LogOut size={18} /><span className="nav-label nav-label-desktop">Đăng xuất</span></button>
         </div>
       </aside>
 
-      {/* Main workspace */}
       <div className="workspace">
         <header className="topbar">
-          <div className="topbar-user">
-            <p>{user.role}</p>
-            <h1>{user.name}</h1>
-          </div>
+          <div className="topbar-user"><p>{user.role}</p><h1>{user.name}</h1></div>
           <div className="topbar-actions">
-            <button className="btn btn-ghost topbar-menu-btn" onClick={() => setMobileNavOpen(true)}>
-              <Menu size={15} /> Menu
-            </button>
-            <button className="btn btn-ghost" onClick={() => setRefresh((v) => v + 1)}>
-              <RefreshCw size={15} /> Làm mới
-            </button>
+            <button className="btn btn-ghost topbar-menu-btn" onClick={() => setMobileNavOpen(true)}><Menu size={15} /> Menu</button>
+            <button className="btn btn-ghost" onClick={() => setRefresh((v) => v + 1)}><RefreshCw size={15} /> Làm mới</button>
           </div>
         </header>
         <div className="workspace-body">
           {tab === 'overview'    && <Overview refreshToken={refreshToken} />}
           {tab === 'orders'      && <Orders title="Bill đang làm" statuses={['NEW', 'PREPARING']} user={user} refreshToken={refreshToken} />}
           {tab === 'delivery'    && <Orders title="Bill chờ giao" statuses={['DELIVERING']} user={user} emptyText="Chưa có bill nào chờ giao." refreshToken={refreshToken} />}
+          {tab === 'unpaid'      && <UnpaidOrders refreshToken={refreshToken} user={user} />}
           {tab === 'history'     && <OrderHistory user={user} refreshToken={refreshToken} />}
           {tab === 'menu'        && <MenuManager refreshToken={refreshToken} />}
-          {tab === 'ingredients' && <IngredientManager refreshToken={refreshToken} />}
           {tab === 'tables'      && <TableManager refreshToken={refreshToken} />}
           {tab === 'accounts'    && <AccountManager currentUser={user} onCurrentUserChange={onUserChange} refreshToken={refreshToken} onLogout={onLogout} />}
         </div>
@@ -687,86 +612,283 @@ function DashboardShell({ user, onLogout, onUserChange }) {
         <button className="mobile-nav-backdrop" type="button" onClick={() => setMobileNavOpen(false)} aria-label="Đóng menu" />
         <div className="mobile-nav-panel" role="dialog" aria-label="Điều hướng quản trị">
           <div className="mobile-nav-head">
-            <div>
-              <p>Điều hướng</p>
-              <h2>Chọn chức năng</h2>
-            </div>
-            <button className="btn btn-ghost" type="button" onClick={() => setMobileNavOpen(false)}>
-              Đóng
-            </button>
+            <div><p>Điều hướng</p><h2>Chọn chức năng</h2></div>
+            <button className="btn btn-ghost" type="button" onClick={() => setMobileNavOpen(false)}>Đóng</button>
           </div>
           <nav className="mobile-nav-list">
             {navItems.map((n) => (
-              <button
-                key={n.id}
-                className={`mobile-nav-item ${tab === n.id ? 'active' : ''}`}
-                onClick={() => {
-                  setTab(n.id);
-                  setMobileNavOpen(false);
-                }}
-              >
+              <button key={n.id} className={`mobile-nav-item ${tab === n.id ? 'active' : ''}`} onClick={() => { setTab(n.id); setMobileNavOpen(false); }}>
                 <span className="mobile-nav-icon">{n.icon}</span>
-                <span className="mobile-nav-text">
-                  <b>{n.label}</b>
-                  <small>{n.hint}</small>
-                </span>
+                <span className="mobile-nav-text"><b>{n.label}</b><small>{n.hint}</small></span>
                 <ChevronRight size={16} />
               </button>
             ))}
           </nav>
-          <button className="mobile-nav-logout" type="button" onClick={onLogout}>
-            <LogOut size={18} /> Đăng xuất
-          </button>
+          <button className="mobile-nav-logout" type="button" onClick={onLogout}><LogOut size={18} /> Đăng xuất</button>
         </div>
       </div>
     </div>
   );
 }
 
-// ── Overview ──────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════
+// OVERVIEW — Redesigned per wireframe
+// ══════════════════════════════════════════════════════════
+
+const PIE_COLORS = ['#ef4444','#22c55e','#f97316','#06b6d4','#a855f7','#3b82f6','#eab308'];
+
+// Custom active pie slice
+function renderActiveShape(props) {
+  const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent, value } = props;
+  return (
+    <g>
+      <text x={cx} y={cy - 14} textAnchor="middle" fill="var(--ink)" style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15 }}>{payload.name}</text>
+      <text x={cx} y={cy + 10} textAnchor="middle" fill="var(--ink-2)" style={{ fontSize: 13 }}>{money(value)}</text>
+      <text x={cx} y={cy + 28} textAnchor="middle" fill="var(--ink-3)" style={{ fontSize: 12 }}>{(percent * 100).toFixed(1)}%</text>
+      <Sector cx={cx} cy={cy} innerRadius={innerRadius} outerRadius={outerRadius + 8} startAngle={startAngle} endAngle={endAngle} fill={fill} />
+      <Sector cx={cx} cy={cy} innerRadius={innerRadius - 4} outerRadius={innerRadius - 2} startAngle={startAngle} endAngle={endAngle} fill={fill} />
+    </g>
+  );
+}
+
+// Custom tooltip for bar chart
+function CustomBarTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 14px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }}>
+      <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 13 }}>{label}</div>
+      {payload.map((p, i) => (
+        <div key={i} style={{ fontSize: 13, color: p.fill }}>{p.name}: <b>{typeof p.value === 'number' && p.name === 'Doanh thu' ? money(p.value) : p.value}</b></div>
+      ))}
+    </div>
+  );
+}
+
 function Overview({ refreshToken }) {
-  const [data, setData] = useState(null);
+  const [data, setData]             = useState(null);
+  const [period, setPeriod]         = useState('day');
+  const [topProducts, setTopProducts] = useState([]);
+  const [barData, setBarData]       = useState([]);
+  const [activePieIndex, setActivePieIndex] = useState(0);
+  const chartScrollRef = useRef(null);
+
   const load = () => api('/api/admin/dashboard').then(setData);
   useEffect(() => { load(); }, [refreshToken]);
-  useRealtimeUpdates(['dashboard', 'orders', 'ingredients'], load);
-  if (!data) return <p className="muted">Đang tải...</p>;
+  useRealtimeUpdates(['dashboard', 'orders'], load);
 
-  return (
-    <div className="overview-panel">
-      <div className="metrics-grid">
-        <div className="metric-card">
-          <div className="label">Doanh thu</div>
-          <div className="value">{money(data.revenue)}</div>
-        </div>
-        <div className="metric-card">
-          <div className="label">Chi phí</div>
-          <div className="value">{money(data.cost)}</div>
-        </div>
-        <div className="metric-card accent">
-          <div className="label">Lãi gộp</div>
-          <div className="value">{money(data.profit)}</div>
-        </div>
-        <div className="metric-card">
-          <div className="label">Số đơn</div>
-          <div className="value">{data.orderCount}</div>
-        </div>
-      </div>
-      <div className="overview-feed">
-        <div className="section-head"><h2>Đơn gần đây</h2></div>
-        {data.recentOrders.map((order) => <OrderRowCompact key={order.id} order={order} />)}
-      </div>
+  useEffect(() => {
+    api(`/api/admin/top-products?period=${period}`)
+      .then(setTopProducts)
+      .catch(() => setTopProducts([]));
+  }, [period]);
+
+  // Build bar chart data from top-products or historical endpoint
+  useEffect(() => {
+    // Try to fetch time-series data; fall back to simple single-bar
+    api(`/api/admin/revenue-series?period=${period}`)
+      .then((series) => {
+        setBarData(series);
+      })
+      .catch(() => {
+        // Fallback: single aggregated bar
+        if (data) {
+          const labelMap = { day: 'Theo ngày', month: 'Theo tháng', year: 'Theo năm' };
+          setBarData([{ label: labelMap[period], revenue: data.revenue, orders: data.orderCount }]);
+        }
+      });
+  }, [period, data]);
+
+  // Auto-scroll to the beginning on data change
+  useEffect(() => {
+    if (chartScrollRef.current) {
+      setTimeout(() => {
+        chartScrollRef.current.scrollLeft = 0;
+      }, 100);
+    }
+  }, [barData]);
+
+  if (!data) return (
+    <div className="ov-loading">
+      <div className="ov-spinner" />
+      <span>Đang tải dữ liệu…</span>
     </div>
   );
-}
 
-function OrderRowCompact({ order }) {
+  const periodLabels = { day: 'Theo ngày', month: 'Theo tháng', year: 'Theo năm' };
+
+  // Pie data: top 6 + "Khác"
+  const top6 = topProducts.slice(0, 6);
+  const othersRevenue = topProducts.slice(6).reduce((s, p) => s + (p.totalRevenue || 0), 0);
+  const pieData = [
+    ...top6.map((p) => ({ name: p.name, value: p.totalRevenue || 0, qty: p.totalQuantity || 0 })),
+    ...(othersRevenue > 0 ? [{ name: 'Khác', value: othersRevenue, qty: 0 }] : []),
+  ];
+  const totalPieRevenue = pieData.reduce((s, p) => s + p.value, 0);
+
   return (
-    <div className="order-row-compact">
-      <b>#{order.dailySequence}</b>
-      <span className="order-table-name">{order.table?.name}</span>
-      <span className="order-amount">{money(order.subtotal)}</span>
-      <StatusBadge text={order.status} />
-      <StatusBadge text={order.paymentStatus} />
+    <div className="ov-root">
+      {/* ── HEADER ── */}
+      <div className="ov-header">
+        <div>
+          <h2 className="ov-title">Doanh thu</h2>
+          <p className="ov-subtitle">Thống kê {periodLabels[period].toLowerCase()}</p>
+        </div>
+        <div className="ov-period-tabs">
+          {Object.entries(periodLabels).map(([key, label]) => (
+            <button key={key} className={`ov-period-btn ${period === key ? 'active' : ''}`} onClick={() => setPeriod(key)}>{label}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── ROW 1: Metrics (left) + Bar Chart (right) ── */}
+      <div className="ov-row1">
+        {/* Metrics stack */}
+        <div className="ov-metrics-col">
+          <div className="ov-metric-card ov-metric-revenue">
+            <div className="ov-metric-icon"><TrendingUp size={20} /></div>
+            <div className="ov-metric-body">
+              <div className="ov-metric-label">Tổng doanh thu ({periodLabels[period].toLowerCase()})</div>
+              <div className="ov-metric-value">{money(data.revenue)}</div>
+            </div>
+          </div>
+          <div className="ov-metric-card ov-metric-orders">
+            <div className="ov-metric-icon"><ShoppingBasket size={20} /></div>
+            <div className="ov-metric-body">
+              <div className="ov-metric-label">Số đơn ({periodLabels[period].toLowerCase()})</div>
+              <div className="ov-metric-value">{data.orderCount} <span className="ov-metric-unit">đơn</span></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bar chart */}
+        <div className="ov-chart-card">
+          <div className="ov-chart-title">Doanh thu {periodLabels[period].toLowerCase()}</div>
+          <div className="ov-chart-subtitle">
+            {barData.length > 7 && <span>← Trượt để xem thêm →</span>}
+          </div>
+          {barData.length === 0 ? (
+            <div className="ov-empty-chart">Không có dữ liệu</div>
+          ) : (
+            <div 
+              ref={chartScrollRef}
+              style={{
+                overflowX: 'auto',
+                overflowY: 'hidden',
+                scrollBehavior: 'smooth',
+                WebkitOverflowScrolling: 'touch',
+                marginBottom: 8,
+                paddingBottom: 8,
+              }}
+            >
+              <div style={{ 
+                minWidth: barData.length > 7 ? barData.length * 60 : '100%',
+                display: 'flex',
+                justifyContent: barData.length <= 7 ? 'center' : 'flex-start'
+              }}>
+                <ResponsiveContainer width={barData.length > 7 ? barData.length * 60 : '100%'} height={220}>
+                  <BarChart data={barData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }} barCategoryGap="35%">
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 12, fill: 'var(--ink-3)' }} axisLine={false} tickLine={false} />
+                    <YAxis tickFormatter={(v) => v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} tick={{ fontSize: 11, fill: 'var(--ink-3)' }} axisLine={false} tickLine={false} width={52} />
+                    <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'rgba(37,99,235,0.06)', radius: 8 }} />
+                    <Bar dataKey="revenue" name="Doanh thu" fill="url(#barGrad)" radius={[6, 6, 0, 0]} />
+                    <defs>
+                      <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={1} />
+                        <stop offset="100%" stopColor="#1d4ed8" stopOpacity={0.85} />
+                      </linearGradient>
+                    </defs>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+          <div className="ov-bar-xaxis-label">
+            {period === 'day' && 'Ngày tháng này'}
+            {period === 'month' && 'Tháng năm nay'}
+            {period === 'year' && `Tháng năm ${new Date().getFullYear() - 1}`}
+          </div>
+        </div>
+      </div>
+
+      {/* ── ROW 2: Ranking (left) + Pie Chart (right) ── */}
+      <div className="ov-row2">
+        {/* Ranking table */}
+        <div className="ov-ranking-card">
+          <div className="ov-ranking-header">
+            <BarChart3 size={16} />
+            <span>Bảng xếp hạng</span>
+          </div>
+          {topProducts.length === 0 ? (
+            <div className="ov-empty-chart" style={{ padding: '32px 16px' }}>Không có dữ liệu</div>
+          ) : (
+            <div className="ov-ranking-list">
+              {topProducts.map((product, idx) => (
+                <div key={product.id} className={`ov-ranking-row ${idx < 3 ? 'top3' : ''}`}>
+                  <div className="ov-rank-badge" style={{ background: PIE_COLORS[idx % PIE_COLORS.length] }}>
+                    {idx + 1}
+                  </div>
+                  <div className="ov-rank-info">
+                    <div className="ov-rank-name">{product.name}</div>
+                    <div className="ov-rank-qty">{product.totalQuantity} đơn vị bán</div>
+                  </div>
+                  <div className="ov-rank-revenue">{money(product.totalRevenue)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Pie chart */}
+        <div className="ov-pie-card">
+          <div className="ov-ranking-header">
+            <ShoppingBasket size={16} />
+            <span>Doanh thu bán hàng</span>
+          </div>
+          {pieData.length === 0 ? (
+            <div className="ov-empty-chart" style={{ padding: '32px 16px' }}>Không có dữ liệu</div>
+          ) : (
+            <div className="ov-pie-layout">
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie
+                    activeIndex={activePieIndex}
+                    activeShape={renderActiveShape}
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={68}
+                    outerRadius={100}
+                    dataKey="value"
+                    onMouseEnter={(_, index) => setActivePieIndex(index)}
+                    stroke="none"
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+              {/* Legend */}
+              <div className="ov-pie-legend">
+                {pieData.map((entry, index) => (
+                  <div
+                    key={index}
+                    className={`ov-legend-item ${activePieIndex === index ? 'active' : ''}`}
+                    onMouseEnter={() => setActivePieIndex(index)}
+                  >
+                    <div className="ov-legend-dot" style={{ background: PIE_COLORS[index % PIE_COLORS.length] }} />
+                    <div className="ov-legend-label">
+                      <span className="ov-legend-name">Top {index + 1}{index >= 6 ? '' : ''}{entry.name === 'Khác' ? ' (khác)' : ''}</span>
+                      <span className="ov-legend-pct">{totalPieRevenue > 0 ? ((entry.value / totalPieRevenue) * 100).toFixed(1) : 0}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -777,6 +899,7 @@ const ORDERS_PER_PAGE = 12;
 function Orders({ title, statuses, emptyText = 'Chưa có bill.', user, refreshToken }) {
   const [orders, setOrders] = useState([]);
   const [page, setPage]     = useState(1);
+  const [selectedOrderId, setSelectedOrderId] = useState(null);
   const statusQuery = statuses?.length ? `?status=${statuses.join(',')}` : '';
   const load = () => api(`/api/orders${statusQuery}`).then(setOrders);
   useEffect(() => { load(); setPage(1); }, [statusQuery, refreshToken]);
@@ -789,112 +912,200 @@ function Orders({ title, statuses, emptyText = 'Chưa có bill.', user, refreshT
 
   const totalPages = Math.max(1, Math.ceil(orders.length / ORDERS_PER_PAGE));
   const slice = orders.slice((page - 1) * ORDERS_PER_PAGE, page * ORDERS_PER_PAGE);
+  const selectedOrder = orders.find((o) => o.id === selectedOrderId);
 
   return (
     <div>
-      <div className="section-head">
-        <h2>{title}</h2>
-        <span className="count">{orders.length} đơn</span>
-      </div>
-      {orders.length === 0 && (
-        <div className="empty-state"><ClipboardList size={40} /><p>{emptyText}</p></div>
-      )}
+      <div className="section-head"><h2>{title}</h2><span className="count">{orders.length} đơn</span></div>
+      {orders.length === 0 && <div className="empty-state"><ClipboardList size={40} /><p>{emptyText}</p></div>}
       <div className="orders-grid">
         {slice.map((order) => (
           <div className="order-card" key={order.id}>
             <div className="order-card-header">
               <div>
                 <h3>#{order.dailySequence} — {order.table?.name}</h3>
-                {order.createdAt && <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>{new Date(order.createdAt).toLocaleTimeString('vi-VN')}</div>}
+                {order.createdAt && <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>{new Date(order.createdAt).toLocaleTimeString('vi-VN')} • {order.customer?.phone?.slice(-6)}</div>}
               </div>
               <span className="price">{money(order.subtotal)}</span>
             </div>
-            <div className="order-badges">
-              <StatusBadge text={order.status} />
-              <StatusBadge text={order.paymentStatus} />
-            </div>
+            <div className="order-badges"><StatusBadge text={order.status} /><StatusBadge text={order.paymentStatus} /></div>
             <div className="order-items-list">
               {order.items.map((item) => (
-                <div className="order-item-row" key={item.id}>
-                  <span>{item.quantity}× {item.name}</span>
-                  <span>{money(item.price * item.quantity)}</span>
-                </div>
+                <div className="order-item-row" key={item.id}><span>{item.quantity}× {item.name}</span><span>{money(item.price * item.quantity)}</span></div>
               ))}
             </div>
             <div className="order-actions">
-              <button className="btn btn-ghost" onClick={() => update(order.id, { status: 'PREPARING' })}>
-                <ChefHat size={14} /> Làm
-              </button>
-              <button className="btn btn-ghost" onClick={() => update(order.id, { status: 'DELIVERING' })}>
-                <ReceiptText size={14} /> Giao
-              </button>
-              <button className="btn btn-ghost" onClick={() => update(order.id, { status: 'DELIVERED' })}>
-                <Check size={14} /> Xong
-              </button>
-              {order.paymentStatus !== 'PAID' && (
-                <button className="btn btn-ghost" onClick={() => update(order.id, { paymentStatus: 'PAID' })}>
-                  💵 Đã TT
-                </button>
-              )}
+              <button className="btn btn-ghost" onClick={() => setSelectedOrderId(order.id)}><Eye size={14} /> Chi tiết</button>
+              <button className="btn btn-ghost" onClick={() => update(order.id, { status: 'PREPARING' })}><ChefHat size={14} /> Làm</button>
+              <button className="btn btn-ghost" onClick={() => update(order.id, { status: 'DELIVERING' })}><ReceiptText size={14} /> Giao</button>
+              <button className="btn btn-ghost" onClick={() => update(order.id, { status: 'DELIVERED' })}><Check size={14} /> Xong</button>
+              {order.paymentStatus !== 'PAID' && <button className="btn btn-ghost" onClick={() => update(order.id, { paymentStatus: 'PAID' })}>💵 Đã TT</button>}
               {['OWNER', 'ADMIN'].includes(user?.role) && order.status !== 'CANCELLED' && (
-                <button className="btn btn-danger" onClick={() => update(order.id, { status: 'CANCELLED' })}>
-                  <Trash2 size={14} /> Hủy
-                </button>
+                <button className="btn btn-danger" onClick={() => update(order.id, { status: 'CANCELLED' })}><Trash2 size={14} /> Hủy</button>
               )}
             </div>
           </div>
         ))}
       </div>
       {totalPages > 1 && <Pagination page={page} total={totalPages} onChange={setPage} />}
+      {selectedOrder && (
+        <div className="modal-overlay" onClick={() => setSelectedOrderId(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header"><h2>Chi tiết Bill #{selectedOrder.dailySequence}</h2><button className="btn btn-ghost" onClick={() => setSelectedOrderId(null)}>✕</button></div>
+            <div className="modal-body">
+              <div className="bill-section">
+                <div className="bill-row"><span>Bàn:</span><b>{selectedOrder.table?.name}</b></div>
+                <div className="bill-row"><span>Khách:</span><b>{selectedOrder.customer?.phone}</b></div>
+                <div className="bill-row"><span>Ngày đặt:</span><b>{new Date(selectedOrder.createdAt).toLocaleString('vi-VN')}</b></div>
+              </div>
+              <div className="bill-section">
+                <h3>Danh sách món</h3>
+                {selectedOrder.items.map((item) => (<div className="bill-row" key={item.id}><span>{item.quantity}× {item.name}</span><b>{money(item.price * item.quantity)}</b></div>))}
+              </div>
+              <div className="bill-section" style={{ borderTop: '2px solid var(--border)', paddingTop: 12 }}>
+                <div className="bill-row" style={{ fontSize: 14, fontWeight: 700 }}><span>Tổng cộng:</span><b>{money(selectedOrder.subtotal)}</b></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// ── Order History (full) ──────────────────────────────────
+function ActivityHistoryModal({ order, onClose }) {
+  if (!order) return null;
+  const events = [
+    { status: 'created', label: 'Đặt hàng', time: order.createdAt, details: `${order.customer?.name || 'Khách'} - ${order.customer?.phone}` },
+    ...(order.status === 'PREPARING' || order.completedAt || order.status === 'DELIVERING' || order.deliveredAt || order.status === 'DELIVERED' || order.status === 'CANCELLED'
+      ? [{ status: 'preparing', label: 'Đang làm', time: order.preparingAt || order.createdAt, details: `${order.preparingBy || 'Nhân viên'} - ${order.preparingPhone || ''}`.trim() }] : []),
+    ...(order.status === 'DELIVERING' || order.deliveredAt || order.status === 'DELIVERED' || order.status === 'CANCELLED'
+      ? [{ status: 'delivering', label: 'Đang giao', time: order.deliveringAt || order.createdAt, details: 'Đang gửi đến khách' }] : []),
+    ...(order.deliveredAt ? [{ status: 'delivered', label: 'Đã giao', time: order.deliveredAt, details: `${order.deliveredBy || 'Nhân viên'} - ${order.deliveredPhone || ''}`.trim() }] : []),
+    ...(order.status === 'CANCELLED' ? [{ status: 'cancelled', label: 'Đã hủy', time: order.cancelledAt || order.updatedAt, details: order.cancelledBy ? `${order.cancelledBy} - ${order.cancelledPhone || ''}` : 'Khách hàng đã hủy đơn' }] : []),
+    ...(order.paidAt ? [{ status: 'paid', label: 'Đã thanh toán', time: order.paidAt, details: `${order.paidByUser || 'Nhân viên'} - ${order.paidByPhone || ''}`.trim() }] : [])
+  ];
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header"><h2>Lịch sử hoạt động #{order.dailySequence}</h2><button className="btn btn-ghost" onClick={onClose}>✕</button></div>
+        <div className="modal-body">
+          <div className="timeline">
+            {events.map((event, idx) => (
+              <div key={idx} className="timeline-item">
+                <div className="timeline-marker" style={{ background: 'var(--green)' }}></div>
+                <div className="timeline-content">
+                  <div className="timeline-label">{event.label}</div>
+                  <div className="timeline-time">{new Date(event.time).toLocaleString('vi-VN')}</div>
+                  <div className="timeline-details">{event.details}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BillDetailModal({ order, onClose }) {
+  const [showActivityHistory, setShowActivityHistory] = useState(false);
+  if (!order) return null;
+  return (
+    <>
+      <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header"><h2>Chi tiết Bill #{order.dailySequence}</h2><button className="btn btn-ghost" onClick={onClose}>✕</button></div>
+          <div className="modal-body">
+            <div className="bill-section">
+              <div className="bill-row"><span>Bàn:</span><b>{order.table?.name}</b></div>
+              <div className="bill-row"><span>Khách:</span><b>{order.customer?.phone}</b></div>
+              <div className="bill-row"><span>Ngày đặt:</span><b>{new Date(order.createdAt).toLocaleString('vi-VN')}</b></div>
+              {order.completedAt && <div className="bill-row"><span>Hoàn thành:</span><b>{new Date(order.completedAt).toLocaleString('vi-VN')}</b></div>}
+              {order.deliveredAt && <div className="bill-row"><span>Đã giao:</span><b>{new Date(order.deliveredAt).toLocaleString('vi-VN')}</b></div>}
+              {order.paidAt && <div className="bill-row"><span>Thanh toán:</span><b>{new Date(order.paidAt).toLocaleString('vi-VN')}</b></div>}
+            </div>
+            <div className="bill-section">
+              <h3>Danh sách món</h3>
+              {order.items.map((item) => (<div className="bill-row" key={item.id}><span>{item.quantity}× {item.name}</span><b>{money(item.price * item.quantity)}</b></div>))}
+            </div>
+            <div className="bill-section" style={{ borderTop: '2px solid var(--border)', paddingTop: 12 }}>
+              <div className="bill-row" style={{ fontSize: 14, fontWeight: 700 }}><span>Tổng cộng:</span><b>{money(order.subtotal)}</b></div>
+            </div>
+            <div className="bill-section" style={{ paddingTop: 12 }}>
+              <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => setShowActivityHistory(true)}><History size={14} /> Xem lịch sử hoạt động</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      {showActivityHistory && <ActivityHistoryModal order={order} onClose={() => setShowActivityHistory(false)} />}
+    </>
+  );
+}
+
 const HISTORY_PAGE_SIZE = 20;
 function OrderHistory({ user, refreshToken }) {
   const [orders, setOrders] = useState([]);
   const [page, setPage]     = useState(1);
+  const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const [searchPhone, setSearchPhone] = useState('');
+  const [searchDate, setSearchDate] = useState('');
   const load = () => api('/api/orders').then(setOrders);
   useEffect(() => { load(); setPage(1); }, [refreshToken]);
   useRealtimeUpdates(['orders'], load);
 
-  const totalPages = Math.max(1, Math.ceil(orders.length / HISTORY_PAGE_SIZE));
-  const slice = orders.slice((page - 1) * HISTORY_PAGE_SIZE, page * HISTORY_PAGE_SIZE);
+  const filteredOrders = orders.filter(order => {
+    const phoneMatch = !searchPhone || order.customer?.phone?.includes(searchPhone);
+    let dateMatch = true;
+    if (searchDate) {
+      const orderDate = new Date(order.createdAt).toLocaleDateString('vi-VN');
+      const searchDateFormatted = new Date(searchDate).toLocaleDateString('vi-VN');
+      dateMatch = orderDate === searchDateFormatted;
+    }
+    return phoneMatch && dateMatch;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / HISTORY_PAGE_SIZE));
+  const slice = filteredOrders.slice((page - 1) * HISTORY_PAGE_SIZE, page * HISTORY_PAGE_SIZE);
+  const selectedOrder = orders.find((o) => o.id === selectedOrderId);
 
   return (
     <div>
-      <div className="section-head">
-        <h2>Lịch sử đơn hàng</h2>
-        <span className="count">{orders.length} đơn</span>
+      <div className="section-head"><h2>Lịch sử đơn hàng</h2><span className="count">{filteredOrders.length} đơn</span></div>
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 16, marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+        <div className="field-group" style={{ margin: 0 }}><Phone size={16} /><input className="field" type="tel" placeholder="Tìm theo SĐT" value={searchPhone} onChange={(e) => { setSearchPhone(e.target.value); setPage(1); }} /></div>
+        <div className="field-group" style={{ margin: 0 }}><Calendar size={16} /><input className="field" type="date" value={searchDate} onChange={(e) => { setSearchDate(e.target.value); setPage(1); }} /></div>
+        {(searchPhone || searchDate) && <button className="btn btn-ghost" onClick={() => { setSearchPhone(''); setSearchDate(''); setPage(1); }} style={{ alignSelf: 'flex-end' }}>Xóa bộ lọc</button>}
       </div>
-      {orders.length === 0 && <div className="empty-state"><History size={40} /><p>Chưa có lịch sử đơn.</p></div>}
+      {filteredOrders.length === 0 && <div className="empty-state"><History size={40} /><p>Chưa có lịch sử đơn.</p></div>}
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-s)', overflow: 'hidden' }}>
         {slice.map((order, i) => (
-          <div key={order.id} style={{ padding: '12px 16px', borderBottom: i < slice.length - 1 ? '1px solid var(--border)' : 'none', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
+          <div key={order.id} style={{ padding: '12px 16px', borderBottom: i < slice.length - 1 ? '1px solid var(--border)' : 'none', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, cursor: 'pointer' }} onClick={() => setSelectedOrderId(order.id)}>
             <b style={{ fontFamily: 'var(--font-display)', minWidth: 60 }}>#{order.dailySequence}</b>
             <span style={{ flex: 1, fontSize: 14, color: 'var(--ink-2)' }}>{order.table?.name}</span>
             <span style={{ fontWeight: 700, color: 'var(--green)', whiteSpace: 'nowrap' }}>{money(order.subtotal)}</span>
-            <StatusBadge text={order.status} />
-            <StatusBadge text={order.paymentStatus} />
-            {order.createdAt && <span className="muted" style={{ width: '100%', fontSize: 12 }}>{new Date(order.createdAt).toLocaleString('vi-VN')} — {order.items.map((i) => `${i.quantity}× ${i.name}`).join(', ')}</span>}
+            <StatusBadge text={order.status} /><StatusBadge text={order.paymentStatus} />
+            {order.createdAt && <span className="muted" style={{ width: '100%', fontSize: 12 }}>{new Date(order.createdAt).toLocaleString('vi-VN')} • {order.customer?.phone} — {order.items.map((i) => `${i.quantity}× ${i.name}`).join(', ')}</span>}
           </div>
         ))}
       </div>
       {totalPages > 1 && <Pagination page={page} total={totalPages} onChange={setPage} />}
+      {selectedOrder && <BillDetailModal order={selectedOrder} onClose={() => setSelectedOrderId(null)} />}
     </div>
   );
 }
 
-// ── Menu Manager ──────────────────────────────────────────
 function MenuManager({ refreshToken }) {
   const [items, setItems] = useState([]);
-  const [form, setForm]   = useState({ name: '', price: 0, description: '', imageUrl: '' });
+  const [categories, setCategories] = useState([]);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [form, setForm]   = useState({ name: '', price: 0, description: '', imageUrl: '', categoryId: '' });
   const [editingId, setEditingId] = useState(null);
   const [editingForm, setEditingForm] = useState(null);
   const load = () => api('/api/admin/menu-items').then(setItems);
   useEffect(() => { load(); }, [refreshToken]);
   useRealtimeUpdates(['menu'], load);
+  useEffect(() => { api('/api/admin/categories').then(setCategories).catch(() => {}); }, []);
 
   function chooseImage(e) {
     const file = e.target.files?.[0];
@@ -906,197 +1117,148 @@ function MenuManager({ refreshToken }) {
 
   async function submit(e) {
     e.preventDefault();
-    await api('/api/admin/menu-items', { method: 'POST', body: JSON.stringify({ ...form, price: Number(form.price) }) });
-    setForm({ name: '', price: 0, description: '', imageUrl: '' });
+    await api('/api/admin/menu-items', { method: 'POST', body: JSON.stringify({ ...form, price: Number(form.price), categoryId: form.categoryId || null }) });
+    setForm({ name: '', price: 0, description: '', imageUrl: '', categoryId: '' });
+    setShowAddForm(false);
     load();
   }
 
   function startEdit(item) {
     setEditingId(item.id);
-    setEditingForm({
-      name: item.name,
-      price: item.price,
-      description: item.description || '',
-      imageUrl: item.imageUrl || '',
-      active: item.active !== false,
-      categoryId: item.categoryId || ''
-    });
+    setEditingForm({ name: item.name, price: item.price, description: item.description || '', imageUrl: item.imageUrl || '', active: item.active !== false, categoryId: item.categoryId || '' });
   }
 
   async function saveEdit(itemId) {
-    await api(`/api/admin/menu-items/${itemId}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        ...editingForm,
-        price: Number(editingForm.price),
-        categoryId: editingForm.categoryId || null
-      })
-    });
-    setEditingId(null);
-    setEditingForm(null);
-    load();
+    await api(`/api/admin/menu-items/${itemId}`, { method: 'PUT', body: JSON.stringify({ ...editingForm, price: Number(editingForm.price), categoryId: editingForm.categoryId || null }) });
+    setEditingId(null); setEditingForm(null); load();
   }
 
   async function removeItem(itemId) {
-    if (!window.confirm('Ẩn món này khỏi menu?')) return;
+    if (!window.confirm('Xóa vĩnh viễn món này?')) return;
     await api(`/api/admin/menu-items/${itemId}`, { method: 'DELETE' });
-    if (editingId === itemId) {
-      setEditingId(null);
-      setEditingForm(null);
-    }
+    if (editingId === itemId) { setEditingId(null); setEditingForm(null); }
+    load();
+  }
+
+  async function toggleOutOfStock(itemId) {
+    await api(`/api/admin/menu-items/${itemId}/toggle-hidden`, { method: 'PUT' });
     load();
   }
 
   return (
     <div>
       <div className="section-head"><h2>Menu</h2><span className="count">{items.length} món</span></div>
-      <form className="menu-add-form" onSubmit={submit}>
-        <label className="image-picker">
-          {form.imageUrl ? <img src={form.imageUrl} alt="" /> : <><ImagePlus size={28} /><span>Thêm ảnh</span></>}
-          <input type="file" accept="image/*" onChange={chooseImage} />
-        </label>
-        <div className="form-fields">
-          <input className="field" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Tên món" />
-          <input className="field" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="Giá bán (VND)" type="number" />
-          <textarea className="field" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Mô tả món" />
-          <button className="btn btn-primary" type="submit"><Plus size={16} /> Thêm món</button>
-        </div>
-      </form>
-      <div className="menu-grid">
-        {items.map((item) => (
-          <div className={`menu-admin-card ${item.active === false ? 'is-muted' : ''}`} key={item.id}>
-            <img src={item.imageUrl || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=300&q=60'} alt={item.name} />
-            {editingId === item.id && editingForm ? (
-              <div className="card-edit-panel">
-                <input className="field" value={editingForm.name} onChange={(e) => setEditingForm({ ...editingForm, name: e.target.value })} placeholder="Tên món" />
-                <input className="field" value={editingForm.price} onChange={(e) => setEditingForm({ ...editingForm, price: e.target.value })} placeholder="Giá bán" type="number" />
-                <textarea className="field" value={editingForm.description} onChange={(e) => setEditingForm({ ...editingForm, description: e.target.value })} placeholder="Mô tả" />
-                <input className="field" value={editingForm.imageUrl} onChange={(e) => setEditingForm({ ...editingForm, imageUrl: e.target.value })} placeholder="URL ảnh" />
-                <div className="admin-card-actions">
-                  <button className="btn btn-primary" type="button" onClick={() => saveEdit(item.id)}><Check size={14} /> Lưu</button>
-                  <button className="btn btn-ghost" type="button" onClick={() => { setEditingId(null); setEditingForm(null); }}>Hủy</button>
-                </div>
-              </div>
-            ) : (
-              <div className="menu-admin-body">
-                <div className="info">
-                  <b>{item.name}</b>
-                  <span className="price">{money(item.price)}</span>
-                </div>
-                <p className="muted menu-admin-desc">{item.description || 'Không có mô tả'}</p>
-                <div className="admin-card-actions">
-                  <button className="btn btn-ghost" type="button" onClick={() => startEdit(item)}><Utensils size={14} /> Sửa</button>
-                  <button className="btn btn-danger" type="button" onClick={() => removeItem(item.id)}><Trash2 size={14} /> Xóa</button>
-                </div>
-              </div>
-            )}
+      <button className="btn btn-primary" onClick={() => setShowAddForm(!showAddForm)} style={{ marginBottom: 16 }}><Plus size={16} /> {showAddForm ? 'Ẩn' : 'Thêm mới'}</button>
+      {showAddForm && (
+        <form className="menu-add-form" onSubmit={submit}>
+          <label className="image-picker">
+            {form.imageUrl ? <img src={form.imageUrl} alt="" /> : <><ImagePlus size={28} /><span>Thêm ảnh</span></>}
+            <input type="file" accept="image/*" onChange={chooseImage} />
+          </label>
+          <div className="form-fields">
+            <input className="field" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Tên món" required />
+            <input className="field" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="Giá bán (VND)" type="number" required />
+            <textarea className="field" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Mô tả món" />
+            <select className="field" value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>
+              <option value="">Chọn phân loại</option>
+              {categories.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+            </select>
+            <button className="btn btn-primary" type="submit"><Plus size={16} /> Thêm món</button>
           </div>
-        ))}
+        </form>
+      )}
+      <div className="menu-grid">
+        {items.map((item) => {
+          const category = categories.find((c) => c.id === item.categoryId);
+          return (
+            <div className={`menu-admin-card ${item.hidden ? 'is-muted' : ''}`} key={item.id}>
+              <img src={item.imageUrl || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=300&q=60'} alt={item.name} />
+              {editingId === item.id && editingForm ? (
+                <div className="card-edit-panel">
+                  <input className="field" value={editingForm.name} onChange={(e) => setEditingForm({ ...editingForm, name: e.target.value })} placeholder="Tên món" />
+                  <input className="field" value={editingForm.price} onChange={(e) => setEditingForm({ ...editingForm, price: e.target.value })} placeholder="Giá bán" type="number" />
+                  <textarea className="field" value={editingForm.description} onChange={(e) => setEditingForm({ ...editingForm, description: e.target.value })} placeholder="Mô tả" />
+                  <input className="field" value={editingForm.imageUrl} onChange={(e) => setEditingForm({ ...editingForm, imageUrl: e.target.value })} placeholder="URL ảnh" />
+                  <select className="field" value={editingForm.categoryId} onChange={(e) => setEditingForm({ ...editingForm, categoryId: e.target.value })}>
+                    <option value="">Chọn phân loại</option>
+                    {categories.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                  </select>
+                  <div className="admin-card-actions">
+                    <button className="btn btn-primary" type="button" onClick={() => saveEdit(item.id)}><Check size={14} /> Lưu</button>
+                    <button className="btn btn-ghost" type="button" onClick={() => { setEditingId(null); setEditingForm(null); }}>Hủy</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="menu-admin-body">
+                  {category && <span className="category-badge" style={{ display: 'inline-block', fontSize: 11, backgroundColor: '#e8f2fc', color: '#1a5f9e', padding: '3px 8px', borderRadius: '4px', marginBottom: '6px' }}>{category.name}</span>}
+                  <div className="info"><b>{item.name}</b><span className="price">{money(item.price)}</span></div>
+                  <p className="muted menu-admin-desc">{item.description || 'Không có mô tả'}</p>
+                  <div className="admin-card-actions">
+                    <button className="btn btn-ghost" type="button" onClick={() => startEdit(item)}><Utensils size={14} /> Sửa</button>
+                    <button className={`btn ${item.hidden ? 'btn-primary' : 'btn-ghost'}`} type="button" onClick={() => toggleOutOfStock(item.id)}>{item.hidden ? '⭕ Hết' : '● Còn'}</button>
+                    <button className="btn btn-danger" type="button" onClick={() => removeItem(item.id)}><Trash2 size={14} /> Xóa</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-// ── Ingredient Manager ────────────────────────────────────
-function IngredientManager({ refreshToken }) {
-  const [items, setItems] = useState([]);
-  const [form, setForm]   = useState({ name: '', unit: 'g', stock: 0, minStock: 0, unitCost: 0 });
-  const [editingId, setEditingId] = useState(null);
-  const [editingForm, setEditingForm] = useState(null);
-  const load = () => api('/api/admin/ingredients').then(setItems);
+function UnpaidOrders({ refreshToken, user }) {
+  const [orders, setOrders] = useState([]);
+  const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const [clickedButtons, setClickedButtons] = useState({});
+  const load = () => api('/api/orders').then((allOrders) => { setOrders(allOrders.filter((o) => o.paymentStatus !== 'PAID')); });
   useEffect(() => { load(); }, [refreshToken]);
-  useRealtimeUpdates(['ingredients'], load);
+  useRealtimeUpdates(['orders'], load);
 
-  async function submit(e) {
-    e.preventDefault();
-    await api('/api/admin/ingredients', { method: 'POST', body: JSON.stringify({ ...form, stock: Number(form.stock), minStock: Number(form.minStock), unitCost: Number(form.unitCost) }) });
-    setForm({ name: '', unit: 'g', stock: 0, minStock: 0, unitCost: 0 });
-    load();
+  async function markAsPaid(orderId) {
+    if (clickedButtons[orderId]) return;
+    setClickedButtons((prev) => ({ ...prev, [orderId]: true }));
+    try {
+      await api(`/api/orders/${orderId}/status`, { method: 'PATCH', body: JSON.stringify({ paymentStatus: 'PAID' }) });
+      load();
+    } catch (err) { setClickedButtons((prev) => ({ ...prev, [orderId]: false })); }
   }
 
-  function startEdit(item) {
-    setEditingId(item.id);
-    setEditingForm({
-      name: item.name,
-      unit: item.unit,
-      stock: item.stock,
-      minStock: item.minStock,
-      unitCost: item.unitCost,
-      active: item.active !== false
-    });
-  }
-
-  async function saveEdit(itemId) {
-    await api(`/api/admin/ingredients/${itemId}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        ...editingForm,
-        stock: Number(editingForm.stock),
-        minStock: Number(editingForm.minStock),
-        unitCost: Number(editingForm.unitCost)
-      })
-    });
-    setEditingId(null);
-    setEditingForm(null);
-    load();
-  }
-
-  async function removeItem(itemId) {
-    if (!window.confirm('Ẩn nguyên liệu này?')) return;
-    await api(`/api/admin/ingredients/${itemId}`, { method: 'DELETE' });
-    if (editingId === itemId) {
-      setEditingId(null);
-      setEditingForm(null);
-    }
-    load();
-  }
+  const selectedOrder = orders.find((o) => o.id === selectedOrderId);
 
   return (
     <div>
-      <div className="section-head"><h2>Nguyên liệu</h2><span className="count">{items.length}</span></div>
-      <form className="inline-form" onSubmit={submit}>
-        {['name', 'unit', 'stock', 'minStock', 'unitCost'].map((f) => (
-          <input key={f} className="field" value={form[f]} onChange={(e) => setForm({ ...form, [f]: e.target.value })} placeholder={f} />
-        ))}
-        <button className="btn btn-primary" type="submit"><Plus size={15} /> Thêm</button>
-      </form>
-      <div className="ingredient-list">
-        {items.map((item) => (
-          <div className={`ingredient-row ${item.active === false ? 'is-muted' : ''}`} key={item.id}>
-            {editingId === item.id && editingForm ? (
-              <div className="card-edit-panel full-width">
-                <div className="inline-form compact-form">
-                  <input className="field" value={editingForm.name} onChange={(e) => setEditingForm({ ...editingForm, name: e.target.value })} placeholder="Tên" />
-                  <input className="field" value={editingForm.unit} onChange={(e) => setEditingForm({ ...editingForm, unit: e.target.value })} placeholder="Đơn vị" />
-                  <input className="field" value={editingForm.stock} onChange={(e) => setEditingForm({ ...editingForm, stock: e.target.value })} placeholder="Tồn kho" type="number" />
-                  <input className="field" value={editingForm.minStock} onChange={(e) => setEditingForm({ ...editingForm, minStock: e.target.value })} placeholder="Tối thiểu" type="number" />
-                  <input className="field" value={editingForm.unitCost} onChange={(e) => setEditingForm({ ...editingForm, unitCost: e.target.value })} placeholder="Giá vốn" type="number" />
-                </div>
-                <div className="admin-card-actions">
-                  <button className="btn btn-primary" type="button" onClick={() => saveEdit(item.id)}><Check size={14} /> Lưu</button>
-                  <button className="btn btn-ghost" type="button" onClick={() => { setEditingId(null); setEditingForm(null); }}>Hủy</button>
-                </div>
+      <div className="section-head"><h2>Đơn chưa thanh toán</h2><span className="count">{orders.length} đơn</span></div>
+      {orders.length === 0 && <div className="empty-state"><Banknote size={40} /><p>Tất cả đơn hàng đã được thanh toán.</p></div>}
+      <div className="orders-grid">
+        {orders.map((order) => (
+          <div className="order-card" key={order.id}>
+            <div className="order-card-header">
+              <div>
+                <h3>#{order.dailySequence} — {order.table?.name}</h3>
+                {order.createdAt && <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>{new Date(order.createdAt).toLocaleTimeString('vi-VN')} • {order.customer?.phone?.slice(-6)}</div>}
               </div>
-            ) : (
-              <>
-                <div>
-                  <b>{item.name}</b>
-                  <div className="meta">{item.stock} {item.unit} · Tối thiểu: {item.minStock} · {money(item.unitCost)}/{item.unit}</div>
-                </div>
-                <div className="admin-card-actions">
-                  <button className="btn btn-ghost" type="button" onClick={() => startEdit(item)}><Package size={14} /> Sửa</button>
-                  <button className="btn btn-danger" type="button" onClick={() => removeItem(item.id)}><Trash2 size={14} /> Xóa</button>
-                </div>
-              </>
-            )}
+              <span className="price">{money(order.subtotal)}</span>
+            </div>
+            <div className="order-badges"><StatusBadge text={order.status} /><StatusBadge text={order.paymentStatus} /></div>
+            <div className="order-items-list">
+              {order.items.map((item) => (<div className="order-item-row" key={item.id}><span>{item.quantity}× {item.name}</span><span>{money(item.price * item.quantity)}</span></div>))}
+            </div>
+            <div className="order-actions">
+              <button className="btn btn-ghost" onClick={() => setSelectedOrderId(order.id)}><Eye size={14} /> Chi tiết</button>
+              <button className="btn btn-primary" onClick={() => markAsPaid(order.id)} disabled={clickedButtons[order.id]} style={{ opacity: clickedButtons[order.id] ? 0.5 : 1 }}>
+                <Banknote size={14} /> {clickedButtons[order.id] ? 'Đã TT' : 'Thanh toán'}
+              </button>
+            </div>
           </div>
         ))}
       </div>
+      {selectedOrder && <BillDetailModal order={selectedOrder} onClose={() => setSelectedOrderId(null)} />}
     </div>
   );
 }
 
-// ── Table Manager ─────────────────────────────────────────
 function TableManager({ refreshToken }) {
   const [items, setItems] = useState([]);
   const [form, setForm]   = useState({ name: '', qrCode: '', seats: 4 });
@@ -1109,40 +1271,23 @@ function TableManager({ refreshToken }) {
   async function submit(e) {
     e.preventDefault();
     await api('/api/admin/tables', { method: 'POST', body: JSON.stringify({ ...form, qrCode: form.qrCode.trim() || undefined, seats: Number(form.seats) }) });
-    setForm({ name: '', qrCode: '', seats: 4 });
-    load();
+    setForm({ name: '', qrCode: '', seats: 4 }); load();
   }
 
   function startEdit(item) {
     setEditingId(item.id);
-    setEditingForm({
-      name: item.name,
-      qrCode: item.qrCode,
-      seats: item.seats,
-      active: item.active !== false
-    });
+    setEditingForm({ name: item.name, qrCode: item.qrCode, seats: item.seats, active: item.active !== false });
   }
 
   async function saveEdit(itemId) {
-    await api(`/api/admin/tables/${itemId}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        ...editingForm,
-        seats: Number(editingForm.seats)
-      })
-    });
-    setEditingId(null);
-    setEditingForm(null);
-    load();
+    await api(`/api/admin/tables/${itemId}`, { method: 'PUT', body: JSON.stringify({ ...editingForm, seats: Number(editingForm.seats) }) });
+    setEditingId(null); setEditingForm(null); load();
   }
 
   async function removeItem(itemId) {
     if (!window.confirm('Ẩn bàn này?')) return;
     await api(`/api/admin/tables/${itemId}`, { method: 'DELETE' });
-    if (editingId === itemId) {
-      setEditingId(null);
-      setEditingForm(null);
-    }
+    if (editingId === itemId) { setEditingId(null); setEditingForm(null); }
     load();
   }
 
@@ -1150,9 +1295,9 @@ function TableManager({ refreshToken }) {
     <div>
       <div className="section-head"><h2>Bàn & QR</h2><span className="count">{items.length} bàn</span></div>
       <form className="inline-form" onSubmit={submit}>
-        <input className="field" value={form.name}    onChange={(e) => setForm({ ...form, name: e.target.value })}    placeholder="Tên bàn" />
-        <input className="field" value={form.qrCode}  onChange={(e) => setForm({ ...form, qrCode: e.target.value })}  placeholder="Mã QR (tự sinh nếu trống)" />
-        <input className="field" value={form.seats}   onChange={(e) => setForm({ ...form, seats: e.target.value })}   placeholder="Số ghế" type="number" style={{ maxWidth: 100 }} />
+        <input className="field" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Tên bàn" />
+        <input className="field" value={form.qrCode} onChange={(e) => setForm({ ...form, qrCode: e.target.value })} placeholder="Mã QR (tự sinh nếu trống)" />
+        <input className="field" value={form.seats} onChange={(e) => setForm({ ...form, seats: e.target.value })} placeholder="Số ghế" type="number" style={{ maxWidth: 100 }} />
         <button className="btn btn-primary" type="submit"><Plus size={15} /> Thêm</button>
       </form>
       <div className="qr-grid">
@@ -1191,17 +1336,15 @@ function TableManager({ refreshToken }) {
   );
 }
 
-// ── Account Manager ───────────────────────────────────────
 function AccountManager({ currentUser, onCurrentUserChange, refreshToken, onLogout }) {
   const [users, setUsers]   = useState([]);
   const [error, setError]   = useState('');
-  const [form, setForm]     = useState({ name: '', email: '', password: '', role: 'STAFF' });
-  const roleOptions = currentUser.role === 'ADMIN' ? ['STAFF', 'OWNER', 'ADMIN'] : ['STAFF', 'OWNER'];
+  const [form, setForm]     = useState({ name: '', phone: '', role: currentUser.role === 'ADMIN' ? 'OWNER' : 'STAFF' });
+  const isAdmin = currentUser.role === 'ADMIN';
+  const isOwner = currentUser.role === 'OWNER';
+  const roleOptions = isAdmin ? ['OWNER', 'STAFF'] : ['STAFF'];
 
-  const load = () => {
-    setError('');
-    return api('/api/admin/users').then(setUsers).catch((err) => setError(err.message));
-  };
+  const load = () => { setError(''); return api('/api/admin/users').then(setUsers).catch((err) => setError(err.message)); };
   useEffect(() => { load(); }, [refreshToken]);
   useRealtimeUpdates(['users'], load);
 
@@ -1209,94 +1352,74 @@ function AccountManager({ currentUser, onCurrentUserChange, refreshToken, onLogo
     e.preventDefault();
     try {
       await api('/api/admin/users', { method: 'POST', body: JSON.stringify({ ...form }) });
-      setForm({ name: '', email: '', password: '', role: 'STAFF' });
+      setForm({ name: '', phone: '', role: isAdmin ? 'OWNER' : 'STAFF' });
       await load();
     } catch (err) { setError(err.message); }
   }
 
+  if (!isAdmin && !isOwner) return <div className="empty-state"><Users size={40} /><p>Không có quyền quản lý tài khoản</p></div>;
+
   return (
     <div>
       <div className="section-head">
-        <div>
-          <h2>Tài khoản</h2>
-          <p className="muted" style={{ marginTop: 2 }}>Tạo, đổi vai trò và xóa tài khoản nhân viên.</p>
-        </div>
+        <div><h2>{isAdmin ? 'Quản lý tài khoản' : 'Quản lý nhân viên'}</h2><p className="muted" style={{ marginTop: 2 }}>{isAdmin ? 'Tạo, chỉnh sửa và xóa tài khoản Owner và Staff' : 'Tạo và quản lý nhân viên'}</p></div>
         <span className="count">{users.length} tài khoản</span>
       </div>
-
       <form className="account-create" onSubmit={submit}>
-        <input className="field" value={form.name}     onChange={(e) => setForm({ ...form, name: e.target.value })}     placeholder="Tên hiển thị" />
-        <input className="field" value={form.email}    onChange={(e) => setForm({ ...form, email: e.target.value })}    placeholder="Email" type="email" />
-        <input className="field" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} type="password" placeholder="Mật khẩu" />
-        <select className="field" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-          {roleOptions.map((r) => <option key={r} value={r}>{r}</option>)}
-        </select>
-        <button className="btn btn-primary" type="submit"><Users size={15} /> Tạo</button>
+        <input className="field" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Tên hiển thị" required />
+        <input className="field" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, '') })} placeholder="Số điện thoại" type="tel" required />
+        <select className="field" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>{roleOptions.map((r) => <option key={r} value={r}>{r}</option>)}</select>
+        <button className="btn btn-primary" type="submit"><Plus size={15} /> {isAdmin ? 'Thêm tài khoản' : 'Thêm nhân viên'}</button>
       </form>
-
       {error && <p className="notice notice-err" style={{ marginBottom: 16 }}>{error}</p>}
-
       <div className="account-grid">
         {users.map((user) => (
-          <UserCard key={user.id} user={user} currentUser={currentUser} roleOptions={roleOptions} onSaved={load} onDeleted={load} onCurrentUserChange={onCurrentUserChange} onLogout={onLogout} />
+          <UserCard key={user.id} user={user} currentUser={currentUser} isAdmin={isAdmin} isOwner={isOwner} roleOptions={roleOptions} onSaved={load} onDeleted={load} onCurrentUserChange={onCurrentUserChange} onLogout={onLogout} />
         ))}
       </div>
     </div>
   );
 }
 
-function UserCard({ user, currentUser, roleOptions, onSaved, onDeleted, onCurrentUserChange, onLogout }) {
-  const locked = currentUser.role === 'OWNER' && user.role === 'ADMIN';
-  const [form, setForm] = useState({ name: user.name, email: user.email, role: user.role, password: '' });
+function UserCard({ user, currentUser, isAdmin, isOwner, roleOptions, onSaved, onDeleted, onCurrentUserChange, onLogout }) {
+  const canEdit = isAdmin || (isOwner && user.role === 'STAFF');
+  const canDelete = canEdit;
+  const canResetPin = isAdmin;
+  const [form, setForm] = useState({ name: user.name, phone: user.phone, role: user.role });
   const [error, setError] = useState('');
-
-  useEffect(() => {
-    const clean = form.name === user.name && form.email === user.email && form.role === user.role && form.password === '';
-    if (clean) setForm({ name: user.name, email: user.email, role: user.role, password: '' });
-  }, [user.id, user.name, user.email, user.role]);
 
   async function submit(e) {
     e.preventDefault();
-    try {
-      const payload = { name: form.name, email: form.email, role: form.role };
-      if (form.password.trim()) payload.password = form.password;
-      await api(`/api/admin/users/${user.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
-      setError(''); await onSaved(); setForm((c) => ({ ...c, password: '' }));
-      if (user.id === currentUser.id) {
-        if (payload.role !== currentUser.role) { onLogout(); return; }
-        const next = { ...currentUser, name: payload.name, email: payload.email, role: payload.role };
-        updateStoredUser(next); onCurrentUserChange(next);
-      }
-    } catch (err) { setError(err.message); }
+    try { await api(`/api/admin/users/${user.id}`, { method: 'PUT', body: JSON.stringify(form) }); setError(''); await onSaved(); }
+    catch (err) { setError(err.message); }
   }
 
   async function remove() {
-    if (!window.confirm(`Xóa tài khoản ${user.email}?`)) return;
+    if (!window.confirm(`Xóa tài khoản ${user.name}?`)) return;
     try { await api(`/api/admin/users/${user.id}`, { method: 'DELETE' }); await onDeleted(); }
     catch (err) { setError(err.message); }
   }
 
+  async function resetPin() {
+    if (!window.confirm(`Reset PIN cho ${user.name}?`)) return;
+    try { await api(`/api/admin/users/${user.id}/reset-pin`, { method: 'PATCH' }); setError(''); await onSaved(); }
+    catch (err) { setError(err.message); }
+  }
+
   return (
-    <div className={`user-card ${locked ? 'locked' : ''}`}>
-      <div className="user-card-head">
-        <div><b>{user.name}</b><p>{user.email}</p></div>
-        <StatusBadge text={user.role} />
-      </div>
+    <div className="user-card">
+      <div className="user-card-head"><div><b>{user.name}</b><p>{user.phone}</p></div><StatusBadge text={user.role} /></div>
       <form className="user-card-form" onSubmit={submit}>
-        <input className="field" value={form.name}     onChange={(e) => setForm({ ...form, name: e.target.value })}     disabled={locked} placeholder="Tên" />
-        <input className="field" value={form.email}    onChange={(e) => setForm({ ...form, email: e.target.value })}    disabled={locked} placeholder="Email" />
-        <select className="field" value={form.role}    onChange={(e) => setForm({ ...form, role: e.target.value })}     disabled={locked}>
-          {roleOptions.map((r) => <option key={r} value={r}>{r}</option>)}
-        </select>
-        <input className="field" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} disabled={locked} type="password" placeholder="Đặt lại mật khẩu" />
-        <div className="order-actions" style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-primary" type="submit" disabled={locked}><Users size={14} /> Lưu</button>
-          <button className="btn btn-danger" type="button" onClick={remove} disabled={locked || user.id === currentUser.id}>
-            <Trash2 size={14} /> Xóa
-          </button>
+        <input className="field" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} disabled={!canEdit} placeholder="Tên" />
+        <input className="field" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, '') })} disabled={!canEdit} placeholder="Số điện thoại" type="tel" />
+        <select className="field" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} disabled={!canEdit}>{roleOptions.map((r) => <option key={r} value={r}>{r}</option>)}</select>
+        <div className="order-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn btn-primary" type="submit" disabled={!canEdit}><Check size={14} /> Lưu</button>
+          {canResetPin && <button className="btn btn-ghost" type="button" onClick={resetPin}><RefreshCw size={14} /> Reset PIN</button>}
+          {canDelete && <button className="btn btn-danger" type="button" onClick={remove} disabled={user.id === currentUser.id}><Trash2 size={14} /> Xóa</button>}
         </div>
       </form>
-      {locked && <p className="muted" style={{ marginTop: 8 }}>Admin chỉ có thể thao tác bởi admin cấp cao hơn.</p>}
+      {!canEdit && <p className="muted" style={{ marginTop: 8 }}>Bạn không có quyền chỉnh sửa tài khoản này.</p>}
       {error && <p className="notice notice-err" style={{ marginTop: 8 }}>{error}</p>}
     </div>
   );

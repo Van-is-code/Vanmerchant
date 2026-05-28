@@ -17,7 +17,7 @@ export async function nextDailySequence(tx, date = businessDate()) {
 export async function calculateCart(items) {
   const ids = items.map((item) => item.menuItemId);
   const menuItems = await prisma.menuItem.findMany({
-    where: { id: { in: ids }, active: true },
+    where: { id: { in: ids }, active: true, hidden: false },
     include: { recipes: { include: { ingredient: true } } }
   });
 

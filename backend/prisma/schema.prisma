@@ -8,13 +8,29 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
+  id           String        @id @default(cuid())
   name         String
-  email        String   @unique
-  passwordHash String
-  role         String   @default("STAFF")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  email        String?       @unique
+  passwordHash String?
+  phone        String?       @unique
+  pin          String?
+  role         String        @default("STAFF")
+  devices      UserDevice[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model UserDevice {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId    String
+  deviceName  String?
+  ipAddress   String?
+  lastUsedAt  DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, deviceId])
 }
 
 model Customer {
@@ -53,6 +69,7 @@ model MenuItem {
   price       Int
   imageUrl    String?
   active      Boolean      @default(true)
+  hidden      Boolean      @default(false)
   categoryId  String?
   category    Category?    @relation(fields: [categoryId], references: [id])
   recipes     RecipeItem[]
@@ -112,10 +129,10 @@ model Order {
   note              String?
   payosOrderCode    Int?          @unique
   payosCheckoutUrl  String?
-  sepayReferenceCode String?      @unique
-  sepayCheckoutUrl   String?
-  sepayTransactionId String?      @unique
+  payosTransactionId String?      @unique
   paymentIntent      PaymentIntent?
+  completedAt       DateTime?
+  deliveredAt       DateTime?
   paidAt            DateTime?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
@@ -152,8 +169,10 @@ model PaymentIntent {
   costTotal         Int      @default(0)
   note              String?
   items             Json
-  sepayCheckoutUrl  String?
-  sepayTransactionId String?  @unique
+  payosOrderCode    Int?     @unique
+  payosCheckoutUrl  String?
+  payosQrCode       String?
+  payosTransactionId String?  @unique
   orderId           String?   @unique
   order             Order?    @relation(fields: [orderId], references: [id])
   createdAt         DateTime  @default(now())

@@ -35,13 +35,23 @@ router.patch('/:id/status', async (req, res, next) => {
       return res.status(403).json({ message: 'Chỉ chủ quán được hủy đơn từ trang quản trị' });
     }
 
+    // Thêm timestamps khi status thay đổi
+    const updateData = { ...data };
+    if (data.status === 'PREPARING') {
+      updateData.completedAt = new Date();
+    } else if (data.status === 'DELIVERING') {
+      updateData.completedAt = new Date();
+    } else if (data.status === 'DELIVERED') {
+      updateData.deliveredAt = new Date();
+    }
+
     let order;
     if (data.paymentStatus === 'PAID') {
       order = await markOrderPaid(req.params.id);
     } else {
       order = await prisma.order.update({
         where: { id: req.params.id },
-        data,
+        data: updateData,
         include: { table: true, customer: true, items: true }
       });
     }
