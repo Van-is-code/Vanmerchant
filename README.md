@@ -88,3 +88,56 @@ Số thứ tự đơn (`dailySequence`) reset theo ngày theo timezone của ser
 5. Return URL đặt về `https://your-frontend.com/payment/result`.
 
 Nguồn tham khảo chính thức: [PayOS NodeJS SDK](https://payos.vn/docs/sdks/back-end/node/).
+
+## Automation deploy Docker + NGINX
+
+Repo đã có sẵn bộ automation để chạy production trên VPS:
+
+- `scripts/vps_bootstrap_deploy.sh`: tự cài Docker, Docker Compose, NGINX, UFW; clone/pull code; chạy DB, seed; build FE/BE qua Docker.
+- `scripts/release_to_vps.sh`: push code lên GitHub rồi SSH qua VPS để chạy deploy script.
+- `deploy/docker-compose.prod.yml`: chạy 3 service `postgres`, `backend`, `frontend`.
+- `deploy/nginx/vanmerchant.conf`: reverse proxy theo domain:
+  - FE: `vanmerchant.uyentoan.studio` -> container frontend
+  - BE: `vanmerchantapi.uyentoan.studio` -> container backend
+
+### 1) Chuẩn bị DNS
+
+Trỏ A record cho cả 2 domain về IP VPS:
+
+- `vanmerchant.uyentoan.studio` -> `103.157.204.155`
+- `vanmerchantapi.uyentoan.studio` -> `103.157.204.155`
+
+### 2) Chạy bootstrap lần đầu trên VPS
+
+```bash
+ssh admin@103.157.204.155
+cd /var/www
+git clone https://github.com/Van-is-code/Vanmerchant.git vanmerchant
+cd /var/www/vanmerchant
+bash scripts/vps_bootstrap_deploy.sh
+```
+
+Sau lần đầu, chỉnh secrets tại:
+
+- `deploy/env/backend.env`
+
+Rồi chạy lại script để apply:
+
+```bash
+cd /var/www/vanmerchant
+bash scripts/vps_bootstrap_deploy.sh
+```
+
+### 3) Deploy các lần sau từ máy local
+
+```bash
+bash scripts/release_to_vps.sh
+```
+
+### 4) Bật HTTPS tự động (khuyến nghị)
+
+Truyền email Let's Encrypt khi chạy bootstrap:
+
+```bash
+LETSENCRYPT_EMAIL=you@example.com bash scripts/vps_bootstrap_deploy.sh
+```

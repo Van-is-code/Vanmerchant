@@ -120,75 +120,87 @@ router.get('/revenue-series', async (req, res, next) => {
   try {
     const period = req.query.period || 'day'; // day, month, year
     const now = new Date();
-    let from = new Date(now);
+    const monthNames = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'];
+    const toDateKey = (date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+    const toMonthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const toDayLabel = (date) => `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const toMonthLabel = (date) => `${monthNames[date.getMonth()]}/${date.getFullYear()}`;
+    const toYearLabel = (year) => String(year);
 
+    let from = new Date(now);
     if (period === 'day') {
-      // Show all days in current month
-      from = new Date(now.getFullYear(), now.getMonth(), 1);
+      // Last 10 days including today
+      from = new Date(now);
+      from.setDate(from.getDate() - 9);
+      from.setHours(0, 0, 0, 0);
     } else if (period === 'month') {
-      // Show all months in current year
-      from = new Date(now.getFullYear(), 0, 1);
+      // Last 10 months including current month
+      from = new Date(now.getFullYear(), now.getMonth() - 9, 1);
     } else if (period === 'year') {
-      // Show all months of previous year (for year-over-year comparison)
-      const prevYear = now.getFullYear() - 1;
-      from = new Date(prevYear, 0, 1);
+      // Last 10 years including current year
+      from = new Date(now.getFullYear() - 9, 0, 1);
     }
 
+    const where = { paymentStatus: 'PAID' };
+    where.createdAt = { gte: from };
+
     const orders = await prisma.order.findMany({
-      where: { createdAt: { gte: from }, paymentStatus: 'PAID' },
+      where,
       include: { items: true }
     });
 
-    // Filter orders for year period to only previous year
-    let filteredOrders = orders;
-    if (period === 'year') {
-      const prevYear = now.getFullYear() - 1;
-      filteredOrders = orders.filter(o => new Date(o.createdAt).getFullYear() === prevYear);
-    }
-
     const seriesMap = {};
 
-    filteredOrders.forEach((order) => {
-      let key;
+    orders.forEach((order) => {
       const orderDate = new Date(order.createdAt);
-      
+      let key;
+
       if (period === 'day') {
-        // Group by day of month
-        key = orderDate.getDate().toString().padStart(2, '0');
+        key = toDateKey(orderDate);
       } else if (period === 'month') {
-        // Group by month
-        const monthNames = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'];
-        key = monthNames[orderDate.getMonth()];
+        key = toMonthKey(orderDate);
       } else if (period === 'year') {
-        // Group by month of the year
-        const monthNames = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'];
-        key = monthNames[orderDate.getMonth()];
+        key = String(orderDate.getFullYear());
       }
 
       if (!seriesMap[key]) {
-        seriesMap[key] = { label: key, revenue: 0, orders: 0 };
+        const label = period === 'day'
+          ? toDayLabel(orderDate)
+          : period === 'month'
+            ? toMonthLabel(orderDate)
+            : toYearLabel(orderDate.getFullYear());
+        seriesMap[key] = { label, revenue: 0, orders: 0 };
       }
+
       seriesMap[key].revenue += order.subtotal;
       seriesMap[key].orders += 1;
     });
 
-    // Generate all labels for the period
     const allLabels = [];
     if (period === 'day') {
-      // All days in current month
-      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-      for (let i = 1; i <= daysInMonth; i++) {
-        allLabels.push(i.toString().padStart(2, '0'));
+      for (let i = 0; i < 10; i++) {
+        const date = new Date(from);
+        date.setDate(from.getDate() + i);
+        allLabels.push({ key: toDateKey(date), label: toDayLabel(date) });
       }
     } else if (period === 'month') {
-      // All 12 months of current year (T1 to T12)
-      allLabels.push('T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12');
+      for (let i = 0; i < 10; i++) {
+        const date = new Date(now.getFullYear(), now.getMonth() - (9 - i), 1);
+        allLabels.push({ key: toMonthKey(date), label: toMonthLabel(date) });
+      }
     } else if (period === 'year') {
-      // All 12 months of previous year (T1 to T12)
-      allLabels.push('T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12');
+      for (let i = 0; i < 10; i++) {
+        const year = now.getFullYear() - (9 - i);
+        allLabels.push({ key: String(year), label: String(year) });
+      }
     }
 
-    const series = allLabels.map((label) => seriesMap[label] || { label, revenue: 0, orders: 0 });
+    const series = allLabels.map((entry) => seriesMap[entry.key] || { label: entry.label, revenue: 0, orders: 0 });
 
     return res.json(series);
   } catch (error) {
@@ -200,6 +212,57 @@ router.get('/categories', async (req, res, next) => {
   try {
     const categories = await prisma.category.findMany({ orderBy: { sortOrder: 'asc' } });
     return res.json(categories);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/categories', async (req, res, next) => {
+  try {
+    const data = z.object({
+      name: z.string().min(1),
+      sortOrder: z.number().int().default(0)
+    }).parse(req.body);
+
+    const category = await prisma.category.create({ data });
+    broadcastDataChange('menu', { action: 'created', categoryId: category.id });
+    return res.status(201).json(category);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.put('/categories/:id', async (req, res, next) => {
+  try {
+    const data = z.object({
+      name: z.string().min(1),
+      sortOrder: z.number().int().default(0)
+    }).parse(req.body);
+
+    const category = await prisma.category.update({
+      where: { id: req.params.id },
+      data
+    });
+
+    broadcastDataChange('menu', { action: 'updated', categoryId: category.id });
+    return res.json(category);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.delete('/categories/:id', async (req, res, next) => {
+  try {
+    const category = await prisma.category.findUnique({ where: { id: req.params.id } });
+    if (!category) return res.status(404).json({ message: 'Không tìm thấy phân loại' });
+
+    await prisma.$transaction([
+      prisma.menuItem.updateMany({ where: { categoryId: req.params.id }, data: { categoryId: null } }),
+      prisma.category.delete({ where: { id: req.params.id } })
+    ]);
+
+    broadcastDataChange('menu', { action: 'deleted', categoryId: req.params.id });
+    return res.status(204).send();
   } catch (error) {
     return next(error);
   }

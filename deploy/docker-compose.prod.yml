@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: vanmerchant-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: vanmerchant
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vanmerchant_change_me}
+    volumes:
+      - vanmerchant_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d vanmerchant"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: vanmerchant-backend
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ./env/backend.env
+    ports:
+      - "127.0.0.1:4000:4000"
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: vanmerchant-frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:2245:80"
+
+volumes:
+  vanmerchant_pgdata:
