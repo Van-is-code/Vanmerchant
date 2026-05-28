@@ -27,7 +27,7 @@ services:
     env_file:
       - ./env/backend.env
     ports:
-      - "127.0.0.1:4000:4000"
+      - "127.0.0.1:4001:4000"
 
   frontend:
     build:
