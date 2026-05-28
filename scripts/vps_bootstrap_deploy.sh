@@ -124,6 +124,14 @@ VITE_API_BASE=https://${API_DOMAIN}
 EOF
 }
 
+cleanup_nginx_sites() {
+  rm -f /etc/nginx/sites-enabled/default
+  rm -f /etc/nginx/sites-enabled/vanmerchant
+  rm -f /etc/nginx/sites-enabled/vanmerchant.conf
+  rm -f /etc/nginx/sites-available/vanmerchant
+  rm -f /etc/nginx/sites-available/vanmerchant.conf
+}
+
 write_nginx_config() {
   cat > /etc/nginx/sites-available/vanmerchant.conf <<EOF
 server {
@@ -164,7 +172,7 @@ server {
   }
 }
 EOF
-  rm -f /etc/nginx/sites-enabled/default
+  cleanup_nginx_sites
   ln -sf /etc/nginx/sites-available/vanmerchant.conf /etc/nginx/sites-enabled/vanmerchant.conf
   nginx -t
   systemctl restart nginx
@@ -246,7 +254,7 @@ docker compose -f docker-compose.prod.yml exec -T backend npm run db:seed
 if [ -n "${LETSENCRYPT_EMAIL}" ]; then
   echo "==> Install certbot and issue certificates"
   apt-get install -y certbot python3-certbot-nginx
-  certbot --nginx -n --agree-tos --redirect \
+  certbot --nginx -n --agree-tos --redirect --force-renewal \
     -m "${LETSENCRYPT_EMAIL}" \
     -d "${WEB_DOMAIN}" -d "${API_DOMAIN}" || true
   systemctl reload nginx || true
