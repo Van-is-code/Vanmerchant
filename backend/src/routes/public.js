@@ -177,7 +177,14 @@ router.post('/orders', async (req, res, next) => {
       });
     });
 
-    broadcastDataChange('orders', { action: 'created', orderId: order.id });
+    broadcastDataChange('orders', {
+      action: 'created',
+      orderId: order.id,
+      dailySequence: order.dailySequence,
+      tableName: table.name,
+      subtotal,
+      itemCount: cart.reduce((sum, item) => sum + item.quantity, 0)
+    });
     broadcastDataChange('dashboard', { action: 'updated', source: 'orders' });
 
     return res.status(201).json(order);

@@ -458,6 +458,30 @@ select.field {
   background: rgba(255,255,255,0.82); overflow: hidden; box-shadow: var(--shadow-s);
   transition: transform .2s; backdrop-filter: blur(18px);
 }
+
+/* Notification toast (mobile-first) */
+.notification-toast {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 16px;
+  background: linear-gradient(180deg, #ffffff, #f7fff7);
+  border: 1px solid rgba(79,143,84,0.12);
+  box-shadow: 0 10px 30px rgba(79,143,84,0.12);
+  padding: 12px 14px;
+  border-radius: 12px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+}
+.notification-title { font-weight: 800; font-size: 15px; color: var(--ink); }
+.notification-body { font-size: 13px; color: var(--ink-2); }
+
+@media(min-width: 900px) {
+  .notification-toast { right: 24px; left: auto; width: 340px; bottom: 24px; border-radius: 10px; }
+}
 .menu-admin-card:hover { transform: translateY(-4px); }
 .menu-admin-card img { width: 100%; height: 120px; object-fit: cover; }
 .menu-admin-card .info { display: flex; justify-content: space-between; align-items: center; gap: 8px; }

@@ -640,6 +640,39 @@ function DashboardShell({ user, onLogout, onUserChange }) {
   const [tab, setTab]           = useState(canManage ? 'overview' : 'orders');
   const [refreshToken, setRefresh] = useState(0);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // Notification state for new orders
+  const [notice, setNotice] = useState(null);
+  const noticeTimerRef = useRef(null);
+
+  // Play short bell sound using Web Audio API (fallback-safe)
+  function playBell() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.value = 880;
+      g.gain.value = 0.0001;
+      o.connect(g);
+      g.connect(ctx.destination);
+      const now = ctx.currentTime;
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(0.2, now + 0.01);
+      o.start(now);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
+      o.stop(now + 0.7);
+    } catch (e) {
+      // ignore audio errors
+    }
+  }
+
+  // Show a mobile-friendly toast notification
+  function showNotice(title, body) {
+    setNotice({ title, body });
+    playBell();
+    if (noticeTimerRef.current) window.clearTimeout(noticeTimerRef.current);
+    noticeTimerRef.current = window.setTimeout(() => setNotice(null), 6000);
+  }
 
   const navItems = [
     { id: 'overview',     label: 'Doanh thu',   hint: 'Xem doanh thu hôm nay', icon: <BarChart3 size={18} />,        visible: isAdmin },
@@ -651,6 +684,8 @@ function DashboardShell({ user, onLogout, onUserChange }) {
     { id: 'tables',       label: 'Bàn & QR',    hint: 'Mã bàn và in QR', icon: <QrCode size={18} />,                 visible: canManage },
     { id: 'accounts',     label: 'Tài khoản',   hint: 'Quản lý nhân sự', icon: <Users size={18} />,                  visible: canManage },
   ].filter((n) => n.visible);
+
+ 
 
   return (
     <div className="app-shell">
@@ -687,6 +722,12 @@ function DashboardShell({ user, onLogout, onUserChange }) {
           {tab === 'accounts'    && <AccountManager currentUser={user} onCurrentUserChange={onUserChange} refreshToken={refreshToken} onLogout={onLogout} />}
         </div>
       </div>
+      {notice && (
+        <div className="notification-toast" role="status" aria-live="polite" onClick={() => setNotice(null)}>
+          <div className="notification-title">{notice.title}</div>
+          <div className="notification-body">{notice.body}</div>
+        </div>
+      )}
 
       <div className={`mobile-nav-drawer ${mobileNavOpen ? 'open' : ''}`} aria-hidden={!mobileNavOpen}>
         <button className="mobile-nav-backdrop" type="button" onClick={() => setMobileNavOpen(false)} aria-label="Đóng menu" />
@@ -710,6 +751,20 @@ function DashboardShell({ user, onLogout, onUserChange }) {
     </div>
   );
 }
+
+  // Realtime notifications for new orders (show toast + sound)
+  useRealtimeUpdates(['orders'], (payload) => {
+    try {
+      if (payload.resource === 'orders' && payload.action === 'created' && payload.orderId) {
+        const title = payload.dailySequence ? `Đơn mới #${payload.dailySequence}` : 'Đơn mới';
+        const count = Number(payload.itemCount || 0);
+        const tableName = payload.tableName || 'Có đơn mới';
+        const total = Number.isFinite(payload.subtotal) ? money(payload.subtotal) : '';
+        const body = [tableName, count ? `${count} món` : '', total].filter(Boolean).join(' • ');
+        showNotice(title, body || 'Có đơn hàng mới.');
+      }
+    } catch (e) { /* ignore */ }
+  });
 
 // ══════════════════════════════════════════════════════════
 // OVERVIEW — Redesigned per wireframe
