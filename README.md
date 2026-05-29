@@ -104,8 +104,8 @@ Repo đã có sẵn bộ automation để chạy production trên VPS:
 
 Trỏ A record cho cả 2 domain về IP VPS:
 
-- `vanmerchant.uyentoan.studio` -> `103.157.204.155`
-- `vanmerchantapi.uyentoan.studio` -> `103.157.204.155`
+- `tranhalam.uyentoan.studio` -> `103.157.204.155`
+- `apitranhalam.uyentoan.studio` -> `103.157.204.155`
 
 ### 2) Chạy bootstrap lần đầu trên VPS
 

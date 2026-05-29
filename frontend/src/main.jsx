@@ -323,6 +323,15 @@ function CustomerOrder({ qrCode }) {
 
       {activeTab === 'menu' && (
         <>
+          {cartCount > 0 && (
+            <div className="cart-footer">
+              <div className="cart-footer-row">
+                <span className="cart-summary-text"><b>{cartCount}</b> món đã chọn</span>
+                <span className="cart-total-row">Tổng: <span className="total-amt">{money(total)}</span></span>
+              </div>
+              <button className="btn btn-primary btn-full btn-lg" onClick={() => setActiveTab('cart')}>Xem giỏ hàng & đặt →</button>
+            </div>
+          )}
           <div className="customer-menu-tab">
             <div className="menu-filter-panel">
               <div className="menu-search-box field-group">
@@ -388,15 +397,6 @@ function CustomerOrder({ qrCode }) {
               ))
             )}
           </div>
-          {cartCount > 0 && (
-            <div className="cart-footer">
-              <div className="cart-footer-row">
-                <span className="cart-summary-text"><b>{cartCount}</b> món đã chọn</span>
-                <span className="cart-total-row">Tổng: <span className="total-amt">{money(total)}</span></span>
-              </div>
-              <button className="btn btn-primary btn-full btn-lg" onClick={() => setActiveTab('cart')}>Xem giỏ hàng & đặt →</button>
-            </div>
-          )}
         </>
       )}
 

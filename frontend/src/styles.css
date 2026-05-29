@@ -569,7 +569,7 @@ select.field {
 .login-phone-card .input-row { display: flex; flex-direction: column; gap: 10px; }
 
 .customer-shell {
-  min-height: 100svh; width: min(100%, 640px); margin: 0 auto;
+  min-height: 100svh; height: 100svh; width: min(100%, 640px); margin: 0 auto;
   display: flex; flex-direction: column;
   background:
     radial-gradient(circle at top left, rgba(238,206,143,.34), transparent 30%),
@@ -623,7 +623,7 @@ select.field {
   font-size: 11px; font-weight: 800; padding: 0 5px;
 }
 
-.customer-menu-tab { flex: 1; overflow-y: auto; padding: 20px 22px 24px; display: flex; flex-direction: column; gap: 24px; }
+.customer-menu-tab { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 22px 24px; display: flex; flex-direction: column; gap: 24px; -webkit-overflow-scrolling: touch; }
 .menu-filter-panel { display: flex; flex-direction: column; gap: 12px; margin-bottom: 4px; }
 .menu-search-box {
   display: flex; align-items: center; gap: 10px;
@@ -687,10 +687,10 @@ select.field {
 .stepper-count { width: 22px; text-align: center; font-weight: 700; font-size: 15px; }
 
 .cart-footer {
-  position: sticky; bottom: 0; z-index: 8; margin: 0 12px 12px;
+  position: relative; z-index: 8; flex-shrink: 0; margin: 10px 12px 0;
   padding: 12px 14px 14px; background: rgba(255,255,255,.96);
   border: 1px solid rgba(143,171,118,.16); border-radius: 22px;
-  box-shadow: 0 -4px 20px rgba(79,143,84,.1);
+  box-shadow: 0 8px 24px rgba(79,143,84,.12);
 }
 .cart-footer-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .cart-summary-text { font-size: 13px; color: var(--ink-3); }
@@ -698,7 +698,7 @@ select.field {
 .cart-total-row { font-size: 15px; font-weight: 700; }
 .cart-total-row .total-amt { color: var(--green); font-family: var(--font-display); font-size: 1.1rem; }
 
-.cart-tab { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.cart-tab { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; -webkit-overflow-scrolling: touch; }
 .cart-empty { text-align: center; padding: 48px 24px; color: var(--ink-3); }
 .cart-empty svg { margin: 0 auto 12px; opacity: .4; }
 .cart-lines { display: flex; flex-direction: column; background: rgba(255,255,255,0.9); border-radius: 22px; border: 1px solid var(--border); overflow: hidden; }
@@ -712,7 +712,7 @@ select.field {
 .cart-summary-card .total-row { font-size: 16px; font-weight: 800; padding-top: 10px; margin-top: 8px; border-top: 1px solid var(--border); }
 .cart-summary-card .total-row .total-amt { color: var(--green); font-family: var(--font-display); }
 
-.history-tab { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.history-tab { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; -webkit-overflow-scrolling: touch; }
 .history-card { padding: 14px; background: rgba(255,255,255,0.9); border: 1px solid var(--border); border-radius: 22px; box-shadow: var(--shadow-s); }
 .history-card-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
 .history-card-head .order-meta b { font-family: var(--font-display); font-size: 1rem; }
@@ -970,5 +970,10 @@ select.field {
   .qr-card { grid-template-columns: 84px minmax(0, 1fr); }
   .qr-card img { width: 84px; height: 84px; }
   .customer-shell { max-width: 100%; }
+  .cart-footer { margin: 8px 10px 0; padding: 10px 12px 12px; border-radius: 18px; }
+  .cart-footer-row { margin-bottom: 8px; }
+  .cart-footer .btn-lg { min-height: 44px; padding: 10px 14px; font-size: 14px; }
+  .cart-total-row { font-size: 14px; }
+  .cart-total-row .total-amt { font-size: 1rem; }
   .topbar-actions .btn { padding: 8px 10px; font-size: 13px; }
 }

@@ -36,20 +36,19 @@ function getPayosClient() {
   requirePayosConfig();
 
   if (!payosClient) {
-    payosClient = new PayOS({
-      clientId: config.payos.clientId,
-      apiKey: config.payos.apiKey,
-      checksumKey: config.payos.checksumKey,
-      ...(config.payos.baseUrl ? { baseURL: config.payos.baseUrl } : {})
-    });
+    payosClient = new PayOS(
+      config.payos.clientId,
+      config.payos.apiKey,
+      config.payos.checksumKey
+    );
   }
 
   return payosClient;
 }
 
-function buildPayosOrderCode(date = businessDate()) {
-  const suffix = `${String(Date.now()).slice(-5)}${String(Math.floor(Math.random() * 100)).padStart(2, '0')}`;
-  return Number(`${date.replaceAll('-', '')}${suffix}`);
+function buildPayosOrderCode() {
+  const code = Date.now() % 2_000_000_000;
+  return code > 0 ? code : Math.floor(Math.random() * 1_000_000_000) + 1;
 }
 
 export function buildPayosIntentReferenceCode(date = businessDate()) {
@@ -92,5 +91,5 @@ export async function createPayosLink({ amount, referenceCode, description, item
 
 export async function verifyPayosWebhook(body) {
   const payos = getPayosClient();
-  return payos.webhooks.verify(body);
+  return payos.verifyPaymentWebhookData(body);
 }
