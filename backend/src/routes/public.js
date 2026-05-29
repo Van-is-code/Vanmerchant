@@ -1,11 +1,82 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../db.js';
-import { calculateCart, createOrderFromCart, businessDate } from '../services/order-service.js';
-import { createPayosLink, buildPayosIntentReferenceCode } from '../services/payos-service.js';
+import { calculateCart, createOrderFromCart, createPaidOrderFromIntent, businessDate } from '../services/order-service.js';
+import { createPayosLink, buildPayosIntentReferenceCode, getPayosPaymentInfo } from '../services/payos-service.js';
+import { printKitchenTicket } from '../services/print-service.js';
 import { broadcastDataChange } from '../services/realtime.js';
 
 const router = Router();
+
+async function syncPaymentIntentFromPayos(intent) {
+  if (!intent || intent.status !== 'PENDING' || !intent.payosOrderCode) {
+    return { intent, order: intent?.order || null };
+  }
+
+  let paymentInfo;
+  try {
+    paymentInfo = await getPayosPaymentInfo(intent.payosOrderCode);
+  } catch (error) {
+    console.warn('Khong the doi soat PayOS:', error.message);
+    return { intent, order: intent.order || null };
+  }
+
+  const payosStatus = String(paymentInfo?.status || '').toUpperCase();
+  const paidByAmount = Number(paymentInfo?.amountRemaining) === 0 && Number(paymentInfo?.amountPaid) >= Number(intent.subtotal);
+  const isPaid = payosStatus === 'PAID' || paidByAmount;
+
+  if (!isPaid) {
+    if (['CANCELLED', 'CANCELED'].includes(payosStatus)) {
+      const cancelled = await prisma.paymentIntent.update({
+        where: { id: intent.id },
+        data: { status: 'CANCELLED' }
+      });
+      broadcastDataChange('payment-intents', { action: 'failed', intentId: intent.id, referenceCode: intent.referenceCode });
+      return { intent: cancelled, order: null };
+    }
+
+    return { intent, order: intent.order || null };
+  }
+
+  const transaction = Array.isArray(paymentInfo?.transactions) ? paymentInfo.transactions.at(-1) : null;
+  const transactionId = String(transaction?.reference || paymentInfo?.id || intent.payosOrderCode || '').trim();
+
+  const paid = await prisma.$transaction(async (tx) => {
+    const freshIntent = await tx.paymentIntent.findUnique({ where: { id: intent.id } });
+    if (!freshIntent) throw new Error('Khong tim thay payment intent');
+
+    const order = freshIntent.orderId
+      ? await tx.order.findUnique({ where: { id: freshIntent.orderId }, include: { table: true, customer: true, items: true } })
+      : await createPaidOrderFromIntent(tx, freshIntent);
+
+    const updatedIntent = await tx.paymentIntent.update({
+      where: { id: freshIntent.id },
+      data: {
+        status: 'PAID',
+        payosTransactionId: freshIntent.payosTransactionId || transactionId || null,
+        orderId: order.id
+      }
+    });
+
+    return { intent: updatedIntent, order };
+  });
+
+  try {
+    await printKitchenTicket(paid.order);
+  } catch (error) {
+    console.warn('Khong the in bill sau khi doi soat PayOS:', error.message);
+  }
+  broadcastDataChange('payment-intents', {
+    action: 'paid',
+    intentId: paid.intent.id,
+    orderId: paid.order.id,
+    referenceCode: paid.intent.referenceCode
+  });
+  broadcastDataChange('orders', { action: 'paid', orderId: paid.order.id });
+  broadcastDataChange('dashboard', { action: 'updated', source: 'payos-sync' });
+
+  return paid;
+}
 
 router.get('/tables/:qrCode', async (req, res, next) => {
   try {
@@ -200,7 +271,7 @@ router.post('/payment-intents', async (req, res, next) => {
 
 router.get('/payment-intents/:id', async (req, res, next) => {
   try {
-    const intent = await prisma.paymentIntent.findUnique({
+    let intent = await prisma.paymentIntent.findUnique({
       where: { id: req.params.id },
       include: { order: { include: { table: true, customer: true, items: true } } }
     });
@@ -209,7 +280,10 @@ router.get('/payment-intents/:id', async (req, res, next) => {
       return res.status(404).json({ message: 'Không tìm thấy yêu cầu thanh toán' });
     }
 
-    const order = intent.order || (intent.orderId
+    const synced = await syncPaymentIntentFromPayos(intent);
+    intent = synced.intent;
+
+    const order = synced.order || intent.order || (intent.orderId
       ? await prisma.order.findUnique({
           where: { id: intent.orderId },
           include: { table: true, customer: true, items: true }

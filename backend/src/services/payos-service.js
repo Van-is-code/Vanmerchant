@@ -111,3 +111,9 @@ export async function verifyPayosWebhook(body) {
   const payos = getPayosClient();
   return payos.verifyPaymentWebhookData(body);
 }
+
+export async function getPayosPaymentInfo(orderCode) {
+  if (!orderCode) return null;
+  const payos = getPayosClient();
+  return payos.getPaymentLinkInformation(orderCode);
+}

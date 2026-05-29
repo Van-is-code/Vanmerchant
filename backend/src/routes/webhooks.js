@@ -52,7 +52,11 @@ router.post('/payos', async (req, res, next) => {
           return order;
         });
 
-        await printKitchenTicket(paid);
+        try {
+          await printKitchenTicket(paid);
+        } catch (error) {
+          console.warn('Khong the in bill tu webhook PayOS:', error.message);
+        }
         broadcastDataChange('payment-intents', {
           action: 'paid',
           intentId: intent.id,
@@ -92,7 +96,11 @@ router.post('/payos', async (req, res, next) => {
         where: { id: paid.id },
         data: { payosTransactionId: transactionId || null }
       });
-      await printKitchenTicket(paid);
+      try {
+        await printKitchenTicket(paid);
+      } catch (error) {
+        console.warn('Khong the in bill tu webhook PayOS:', error.message);
+      }
       broadcastDataChange('orders', { action: 'paid', orderId: paid.id });
       broadcastDataChange('dashboard', { action: 'updated', source: 'webhook' });
     } else {
