@@ -1,4 +1,5 @@
 import PayOS from '@payos/node';
+import QRCode from 'qrcode';
 import { config } from '../config.js';
 import { businessDate } from './order-service.js';
 
@@ -51,6 +52,23 @@ function buildPayosOrderCode() {
   return code > 0 ? code : Math.floor(Math.random() * 1_000_000_000) + 1;
 }
 
+async function buildQrImageDataUrl(paymentLink, checkoutUrl) {
+  const qrValue = paymentLink?.qrCode || paymentLink?.qrDataUrl || paymentLink?.qrCodeDataURL || checkoutUrl;
+
+  if (!qrValue) return null;
+  if (/^(data:image\/|https?:\/\/)/i.test(qrValue)) return qrValue;
+
+  return QRCode.toDataURL(qrValue, {
+    errorCorrectionLevel: 'M',
+    margin: 1,
+    width: 320,
+    color: {
+      dark: '#20311f',
+      light: '#ffffff'
+    }
+  });
+}
+
 export function buildPayosIntentReferenceCode(date = businessDate()) {
   const suffix = Math.random().toString(36).slice(2, 8).toUpperCase();
   return `PY${date.replaceAll('-', '')}${suffix}`;
@@ -75,7 +93,7 @@ export async function createPayosLink({ amount, referenceCode, description, item
 
   const paymentLink = await createPaymentLink(paymentData);
   const checkoutUrl = paymentLink?.checkoutUrl || paymentLink?.paymentLink || paymentLink?.paymentUrl || null;
-  const qrDataUrl = paymentLink?.qrCode || paymentLink?.qrDataUrl || paymentLink?.qrCodeDataURL || checkoutUrl;
+  const qrDataUrl = await buildQrImageDataUrl(paymentLink, checkoutUrl);
 
   if (!checkoutUrl) {
     throw new Error('PayOS tra ve du lieu khong hop le: thieu checkoutUrl');
