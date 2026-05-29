@@ -97,15 +97,15 @@ Repo đã có sẵn bộ automation để chạy production trên VPS:
 - `scripts/release_to_vps.sh`: push code lên GitHub rồi SSH qua VPS để chạy deploy script.
 - `deploy/docker-compose.prod.yml`: chạy 3 service `postgres`, `backend`, `frontend`.
 - `deploy/nginx/vanmerchant.conf`: reverse proxy theo domain:
-  - FE: `tranhalam.uyentoan.studio` -> container frontend
-  - BE: `apitranhalam.uyentoan.studio` -> container backend
+  - FE: `tnl.uyentoan.studio` -> container frontend
+  - BE: `apitnl.uyentoan.studio` -> container backend
 
 ### 1) Chuẩn bị DNS
 
 Trỏ A record cho cả 2 domain về IP VPS:
 
-- `tranhalam.uyentoan.studio` -> `103.157.204.155`
-- `apitranhalam.uyentoan.studio` -> `103.157.204.155`
+- `tnl.uyentoan.studio` -> `103.157.204.155`
+- `apitnl.uyentoan.studio` -> `103.157.204.155`
 
 ### 2) Chạy bootstrap lần đầu trên VPS
 
