@@ -7,8 +7,20 @@ import { broadcastDataChange } from '../services/realtime.js';
 
 const router = Router();
 
+router.get('/payos', (req, res) => {
+  return res.status(200).json({ success: true, message: 'PayOS webhook is ready' });
+});
+
+router.head('/payos', (req, res) => {
+  return res.status(200).end();
+});
+
 router.post('/payos', async (req, res, next) => {
   try {
+    if (!req.body?.data && !req.body?.signature) {
+      return res.status(200).json({ success: true, message: 'PayOS webhook is ready' });
+    }
+
     const data = await verifyPayosWebhook(req.body);
     const isPaid = String(data.code || '').trim() === '00';
     const transactionId = String(data.paymentLinkId || data.reference || data.orderCode || '').trim();

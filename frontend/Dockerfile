@@ -18,6 +18,29 @@ server {
 	root /usr/share/nginx/html;
 	index index.html;
 
+	location /api/events {
+		proxy_pass http://backend:2026/api/events;
+		proxy_http_version 1.1;
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_set_header Connection '';
+		proxy_buffering off;
+		proxy_cache off;
+		chunked_transfer_encoding off;
+		proxy_read_timeout 3600s;
+	}
+
+	location /api/ {
+		proxy_pass http://backend:2026/api/;
+		proxy_http_version 1.1;
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+	}
+
 	location / {
 		try_files $uri $uri/ /index.html;
 	}
