@@ -17,6 +17,8 @@ import {
   Minus,
   Package,
   Plus,
+  Bell,
+  BellOff,
   QrCode,
   ReceiptText,
   RefreshCw,
@@ -642,6 +644,8 @@ function DashboardShell({ user, onLogout, onUserChange }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   // Notification state for new orders
   const [notice, setNotice] = useState(null);
+  const [bellEnabled, setBellEnabled] = useState(() => localStorage.getItem('vanmerchant_bell_enabled') !== 'off');
+  const [newOrderCount, setNewOrderCount] = useState(0);
   const noticeTimerRef = useRef(null);
 
   // Play short bell sound using Web Audio API (fallback-safe)
@@ -669,10 +673,18 @@ function DashboardShell({ user, onLogout, onUserChange }) {
   // Show a mobile-friendly toast notification
   function showNotice(title, body) {
     setNotice({ title, body });
-    playBell();
+    if (bellEnabled) playBell();
     if (noticeTimerRef.current) window.clearTimeout(noticeTimerRef.current);
     noticeTimerRef.current = window.setTimeout(() => setNotice(null), 6000);
   }
+
+  useEffect(() => {
+    localStorage.setItem('vanmerchant_bell_enabled', bellEnabled ? 'on' : 'off');
+  }, [bellEnabled]);
+
+  useEffect(() => {
+    if (tab === 'orders') setNewOrderCount(0);
+  }, [tab]);
 
   const navItems = [
     { id: 'overview',     label: 'Doanh thu',   hint: 'Xem doanh thu hôm nay', icon: <BarChart3 size={18} />,        visible: isAdmin },
@@ -685,6 +697,21 @@ function DashboardShell({ user, onLogout, onUserChange }) {
     { id: 'accounts',     label: 'Tài khoản',   hint: 'Quản lý nhân sự', icon: <Users size={18} />,                  visible: canManage },
   ].filter((n) => n.visible);
 
+  useRealtimeUpdates(['orders'], (payload) => {
+    if (payload.resource !== 'orders' || payload.action !== 'created') return;
+
+    if (tab !== 'orders') {
+      setNewOrderCount((current) => current + 1);
+    }
+
+    const title = payload.dailySequence ? `Đơn mới #${payload.dailySequence}` : 'Đơn mới';
+    const count = Number(payload.itemCount || 0);
+    const tableName = payload.tableName || 'Có đơn mới';
+    const total = Number.isFinite(payload.subtotal) ? money(payload.subtotal) : '';
+    const body = [tableName, count ? `${count} món` : '', total].filter(Boolean).join(' • ');
+    showNotice(title, body || 'Có đơn hàng mới.');
+  });
+
  
 
   return (
@@ -695,6 +722,7 @@ function DashboardShell({ user, onLogout, onUserChange }) {
           {navItems.map((n) => (
             <button key={n.id} className={`nav-item ${tab === n.id ? 'active' : ''}`} onClick={() => { setTab(n.id); setMobileNavOpen(false); }}>
               {n.icon}<span className="nav-label nav-label-desktop">{n.label}</span>
+              {n.id === 'orders' && newOrderCount > 0 && <span className="nav-badge">{newOrderCount > 99 ? '99+' : newOrderCount}</span>}
             </button>
           ))}
         </nav>
@@ -708,6 +736,15 @@ function DashboardShell({ user, onLogout, onUserChange }) {
           <div className="topbar-user"><p>{user.role}</p><h1>{user.name}</h1></div>
           <div className="topbar-actions">
             <button className="btn btn-ghost topbar-menu-btn" onClick={() => setMobileNavOpen(true)}><Menu size={15} /> Menu</button>
+            <button
+              className="btn btn-ghost"
+              type="button"
+              onClick={() => setBellEnabled((current) => !current)}
+              title={bellEnabled ? 'Tắt chuông thông báo' : 'Bật chuông thông báo'}
+            >
+              {bellEnabled ? <Bell size={15} /> : <BellOff size={15} />}
+              {bellEnabled ? 'Chuông' : 'Tắt chuông'}
+            </button>
             <button className="btn btn-ghost" onClick={() => setRefresh((v) => v + 1)}><RefreshCw size={15} /> Làm mới</button>
           </div>
         </header>
@@ -741,6 +778,7 @@ function DashboardShell({ user, onLogout, onUserChange }) {
               <button key={n.id} className={`mobile-nav-item ${tab === n.id ? 'active' : ''}`} onClick={() => { setTab(n.id); setMobileNavOpen(false); }}>
                 <span className="mobile-nav-icon">{n.icon}</span>
                 <span className="mobile-nav-text"><b>{n.label}</b><small>{n.hint}</small></span>
+                {n.id === 'orders' && newOrderCount > 0 && <span className="nav-badge mobile">{newOrderCount > 99 ? '99+' : newOrderCount}</span>}
                 <ChevronRight size={16} />
               </button>
             ))}
@@ -751,20 +789,6 @@ function DashboardShell({ user, onLogout, onUserChange }) {
     </div>
   );
 }
-
-  // Realtime notifications for new orders (show toast + sound)
-  useRealtimeUpdates(['orders'], (payload) => {
-    try {
-      if (payload.resource === 'orders' && payload.action === 'created' && payload.orderId) {
-        const title = payload.dailySequence ? `Đơn mới #${payload.dailySequence}` : 'Đơn mới';
-        const count = Number(payload.itemCount || 0);
-        const tableName = payload.tableName || 'Có đơn mới';
-        const total = Number.isFinite(payload.subtotal) ? money(payload.subtotal) : '';
-        const body = [tableName, count ? `${count} món` : '', total].filter(Boolean).join(' • ');
-        showNotice(title, body || 'Có đơn hàng mới.');
-      }
-    } catch (e) { /* ignore */ }
-  });
 
 // ══════════════════════════════════════════════════════════
 // OVERVIEW — Redesigned per wireframe

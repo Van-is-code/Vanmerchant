@@ -165,6 +165,24 @@ select.field {
   font-size: 13px; font-weight: 600; color: rgba(255,255,255,.7);
   transition: background .15s, color .15s; cursor: pointer;
 }
+.nav-item .nav-badge {
+  margin-left: auto;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffd166;
+  color: #20311f;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+.mobile-nav-item .nav-badge {
+  margin-left: auto;
+}
 .nav-item:hover { background: rgba(255,255,255,.12); color: #fff; }
 .nav-item.active { background: rgba(255,255,255,.2); color: #fff; box-shadow: 0 0 0 1px rgba(255,255,255,.15); }
 .nav-item svg { flex-shrink: 0; }
