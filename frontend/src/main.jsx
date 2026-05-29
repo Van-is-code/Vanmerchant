@@ -647,24 +647,38 @@ function DashboardShell({ user, onLogout, onUserChange }) {
   const [bellEnabled, setBellEnabled] = useState(() => localStorage.getItem('vanmerchant_bell_enabled') !== 'off');
   const [newOrderCount, setNewOrderCount] = useState(0);
   const noticeTimerRef = useRef(null);
+  const bellAudioRef = useRef(null);
 
-  // Play short bell sound using Web Audio API (fallback-safe)
+  // Play ringtone from the bundled WAV file, with Web Audio fallback
   function playBell() {
     try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.type = 'sine';
-      o.frequency.value = 880;
-      g.gain.value = 0.0001;
-      o.connect(g);
-      g.connect(ctx.destination);
-      const now = ctx.currentTime;
-      g.gain.setValueAtTime(0.0001, now);
-      g.gain.exponentialRampToValueAtTime(0.2, now + 0.01);
-      o.start(now);
-      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
-      o.stop(now + 0.7);
+      if (!bellAudioRef.current) {
+        bellAudioRef.current = new Audio('/mixkit-bell-notification-933.wav');
+        bellAudioRef.current.preload = 'auto';
+      }
+
+      const audio = bellAudioRef.current;
+      audio.currentTime = 0;
+      audio.volume = 0.9;
+      const playPromise = audio.play();
+      if (playPromise?.catch) {
+        playPromise.catch(() => {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = 'sine';
+          o.frequency.value = 880;
+          g.gain.value = 0.0001;
+          o.connect(g);
+          g.connect(ctx.destination);
+          const now = ctx.currentTime;
+          g.gain.setValueAtTime(0.0001, now);
+          g.gain.exponentialRampToValueAtTime(0.2, now + 0.01);
+          o.start(now);
+          g.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
+          o.stop(now + 0.7);
+        });
+      }
     } catch (e) {
       // ignore audio errors
     }
