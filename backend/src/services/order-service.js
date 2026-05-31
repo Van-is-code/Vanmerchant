@@ -126,7 +126,8 @@ export async function createPaidOrderFromIntent(tx, intent) {
     customerId: intent.customerId,
     paymentMethod: intent.paymentMethod,
     paymentStatus: 'PAID',
-    status: 'PREPARING',
+    // keep status as NEW so UI shows new-order tag and notifications
+    status: 'NEW',
     subtotal: intent.subtotal,
     costTotal: intent.costTotal,
     note: intent.note,
@@ -149,7 +150,7 @@ export async function markOrderPaid(orderId) {
       where: { id: orderId },
       data: {
         paymentStatus: 'PAID',
-        status: order.status === 'NEW' ? 'PREPARING' : order.status,
+        // do not auto-change status to PREPARING so staff can see new orders first
         paidAt: order.paidAt || new Date()
       },
       include: { table: true, customer: true, items: true }

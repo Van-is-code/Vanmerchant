@@ -12,6 +12,7 @@ import userRoutes from './routes/users.js';
 import orderRoutes from './routes/orders.js';
 import { requireAuth } from './middleware/auth.js';
 import { sseHandler } from './services/realtime.js';
+import path from 'path';
 
 const app = express();
 
@@ -44,6 +45,8 @@ app.use(morgan('dev'));
 
 app.get('/health', (req, res) => res.json({ ok: true, name: config.storeName }));
 app.get('/api/events', sseHandler);
+// Serve uploaded public assets (menu images, etc.)
+app.use('/public', express.static(path.join(process.cwd(), 'public')));
 app.use('/api/auth', authRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/webhooks', webhookRoutes);

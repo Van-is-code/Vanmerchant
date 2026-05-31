@@ -75,6 +75,12 @@ router.post('/payos', async (req, res, next) => {
           orderId: paid.id,
           referenceCode: intent.referenceCode
         });
+        // If this webhook created the order from the intent, also broadcast a 'created' event
+        try {
+          const itemCount = (paid.items || []).reduce((s, it) => s + (it.quantity || 0), 0);
+          broadcastDataChange('orders', { action: 'created', orderId: paid.id, dailySequence: paid.dailySequence, tableName: paid.table?.name || '', subtotal: paid.subtotal, itemCount });
+        } catch {}
+        // Still broadcast paid event for listeners interested in payment updates
         broadcastDataChange('orders', { action: 'paid', orderId: paid.id });
         broadcastDataChange('dashboard', { action: 'updated', source: 'webhook' });
       } else {
@@ -113,8 +119,31 @@ router.post('/payos', async (req, res, next) => {
       } catch (error) {
         console.warn('Khong the in bill tu webhook PayOS:', error.message);
       }
+      // Broadcast order + dashboard updates
       broadcastDataChange('orders', { action: 'paid', orderId: paid.id });
       broadcastDataChange('dashboard', { action: 'updated', source: 'webhook' });
+
+      // If there is an associated payment intent, broadcast a payment-intents event
+      try {
+        const intent = await prisma.paymentIntent.findFirst({ where: { orderId: paid.id } });
+        if (intent) {
+          broadcastDataChange('payment-intents', {
+            action: 'paid',
+            intentId: intent.id,
+            orderId: paid.id,
+            referenceCode: intent.referenceCode
+          });
+        } else {
+          // Fallback broadcast so clients listening for payment-intents can react on orders
+          broadcastDataChange('payment-intents', {
+            action: 'paid',
+            intentId: null,
+            orderId: paid.id
+          });
+        }
+      } catch (err) {
+        console.warn('Error broadcasting payment-intents for order:', err?.message || err);
+      }
     } else {
       await prisma.order.update({
         where: { id: order.id },

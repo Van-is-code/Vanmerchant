@@ -5,10 +5,73 @@ import { config } from '../config.js';
 import { prisma } from '../db.js';
 import { requireRole } from '../middleware/auth.js';
 import { broadcastDataChange } from '../services/realtime.js';
+import multer from 'multer';
+import fs from 'fs/promises';
+import path from 'path';
 
 const router = Router();
 
 router.use(requireRole('OWNER', 'ADMIN'));
+
+const MENU_IMAGE_DIR = path.join(process.cwd(), 'public', 'menu_image');
+
+const storage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    try {
+      await fs.mkdir(MENU_IMAGE_DIR, { recursive: true });
+      cb(null, MENU_IMAGE_DIR);
+    } catch (err) {
+      cb(err);
+    }
+  },
+  filename: (req, file, cb) => {
+    const safe = file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '-');
+    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2,8)}-${safe}`);
+  }
+});
+const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
+
+function isLocalMenuImage(url) {
+  if (!url) return false;
+  try {
+    return url.includes('/public/menu_image/') || url.includes('menu_image/');
+  } catch { return false; }
+}
+
+async function unlinkIfLocal(url) {
+  if (!isLocalMenuImage(url)) return;
+  try {
+    const filename = path.basename(url);
+    const p = path.join(MENU_IMAGE_DIR, filename);
+    await fs.unlink(p).catch(() => {});
+  } catch (err) {
+    // ignore
+  }
+}
+
+// Upload a menu image. Expects multipart/form-data with field `image`.
+router.post('/upload-menu-image', upload.single('image'), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+    const imageUrl = `/public/menu_image/${req.file.filename}`;
+    return res.status(201).json({ imageUrl, filename: req.file.filename });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// Delete an uploaded menu image by filename or path
+router.delete('/upload-menu-image/:filename', async (req, res, next) => {
+  try {
+    const filename = req.params.filename || '';
+    if (!filename) return res.status(400).json({ message: 'Missing filename' });
+    const p = path.join(MENU_IMAGE_DIR, path.basename(filename));
+    await fs.unlink(p).catch(() => {});
+    return res.status(204).send();
+  } catch (error) {
+    return next(error);
+  }
+});
 
 function tableOrderUrl(qrCode) {
   return `${config.frontendUrl}/table/${encodeURIComponent(qrCode)}`;
@@ -303,10 +366,16 @@ router.post('/menu-items', async (req, res, next) => {
 
 router.put('/menu-items/:id', async (req, res, next) => {
   try {
-    const item = await prisma.menuItem.update({
-      where: { id: req.params.id },
-      data: req.body
-    });
+    const existing = await prisma.menuItem.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ message: 'Không tìm thấy món' });
+
+    // If imageUrl changed and the old image was a local upload, delete the old file
+    const newImage = req.body?.imageUrl;
+    if (newImage && existing.imageUrl && existing.imageUrl !== newImage) {
+      await unlinkIfLocal(existing.imageUrl);
+    }
+
+    const item = await prisma.menuItem.update({ where: { id: req.params.id }, data: req.body });
     broadcastDataChange('menu', { action: 'updated', id: item.id });
     broadcastDataChange('dashboard', { action: 'updated', source: 'menu' });
     return res.json(item);
@@ -332,9 +401,15 @@ router.put('/menu-items/:id/toggle-hidden', async (req, res, next) => {
 
 router.delete('/menu-items/:id', async (req, res, next) => {
   try {
-    await prisma.menuItem.delete({
-      where: { id: req.params.id }
-    });
+    const existing = await prisma.menuItem.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ message: 'Không tìm thấy món' });
+
+    // delete associated local image if present
+    if (existing.imageUrl) {
+      await unlinkIfLocal(existing.imageUrl);
+    }
+
+    await prisma.menuItem.delete({ where: { id: req.params.id } });
     broadcastDataChange('menu', { action: 'deleted', id: req.params.id });
     broadcastDataChange('dashboard', { action: 'updated', source: 'menu' });
     return res.status(204).send();

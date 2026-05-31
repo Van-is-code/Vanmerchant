@@ -122,6 +122,9 @@ select.field {
 .badge-admin         { background: var(--blue-light); color: var(--blue); }
 .badge-staff         { background: var(--bg2); color: var(--ink-2); }
 
+/* New-order badge (red) */
+.badge-new-order { background: #ef4444; color: #fff; font-weight: 800; padding: 6px 10px; border-radius: 10px; font-size: 12px; }
+
 .notice { padding: 12px 14px; border-radius: var(--radius-s); background: var(--green-light); color: var(--green); font-size: 14px; }
 .notice-warn { background: var(--amber-light); color: var(--amber); }
 .notice-err  { background: var(--red-light); color: var(--red); }
@@ -349,6 +352,7 @@ select.field {
   overflow: hidden;
 }
 .ov-ranking-list { display: flex; flex-direction: column; }
+.ov-ranking-list { max-height: 360px; overflow-y: auto; }
 .ov-ranking-row {
   display: flex; align-items: center; gap: 12px;
   padding: 12px 18px;
@@ -499,6 +503,10 @@ select.field {
 
 @media(min-width: 900px) {
   .notification-toast { right: 24px; left: auto; width: 340px; bottom: 24px; border-radius: 10px; }
+}
+
+@media(max-width: 700px) {
+  .ov-ranking-list { max-height: 260px; }
 }
 .menu-admin-card:hover { transform: translateY(-4px); }
 .menu-admin-card img { width: 100%; height: 120px; object-fit: cover; }

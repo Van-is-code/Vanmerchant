@@ -538,10 +538,13 @@ function Pagination({ page, total, onChange }) {
 const STATUS_MAP = {
   NEW: 'Mới', PREPARING: 'Đang làm', DELIVERING: 'Đang giao',
   DELIVERED: 'Đã giao', CANCELLED: 'Đã hủy',
-  PAID: 'Đã TT', UNPAID: 'Chưa TT', PENDING_PAYMENT: 'Chờ TT',
+  PAID: 'Đã TT', UNPAID: 'Chưa TT', PENDING_PAYMENT: 'Đang chờ xác nhận',
 };
 function StatusBadge({ text }) {
   const key = String(text).toLowerCase();
+  if (String(text) === 'NEW') {
+    return <span className="badge badge-new-order">{STATUS_MAP[text] || text}</span>;
+  }
   return <span className={`badge badge-${key}`}>{STATUS_MAP[text] || text}</span>;
 }
 
@@ -645,6 +648,7 @@ function DashboardShell({ user, onLogout, onUserChange }) {
   // Notification state for new orders
   const [notice, setNotice] = useState(null);
   const [bellEnabled, setBellEnabled] = useState(() => localStorage.getItem('vanmerchant_bell_enabled') !== 'off');
+  const [appVersion, setAppVersion] = useState('');
   const [newOrderCount, setNewOrderCount] = useState(0);
   const noticeTimerRef = useRef(null);
   const bellAudioRef = useRef(null);
@@ -697,6 +701,10 @@ function DashboardShell({ user, onLogout, onUserChange }) {
   }, [bellEnabled]);
 
   useEffect(() => {
+    fetch(`${API_BASE}/api/public/version`).then((r) => r.json()).then((d) => setAppVersion(d.version)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (tab === 'orders') setNewOrderCount(0);
   }, [tab]);
 
@@ -741,7 +749,10 @@ function DashboardShell({ user, onLogout, onUserChange }) {
           ))}
         </nav>
         <div className="sidebar-footer">
-          <button className="nav-item" onClick={onLogout} style={{ width: '100%' }}><LogOut size={18} /><span className="nav-label nav-label-desktop">Đăng xuất</span></button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <button className="nav-item" onClick={onLogout} style={{ width: '100%' }}><LogOut size={18} /><span className="nav-label nav-label-desktop">Đăng xuất</span></button>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', paddingLeft: 8 }} id="app-version">{appVersion ? `v${appVersion}` : ''}</div>
+              </div>
         </div>
       </aside>
 
@@ -844,6 +855,7 @@ function Overview({ refreshToken }) {
   const [barData, setBarData]       = useState([]);
   const [activePieIndex, setActivePieIndex] = useState(0);
   const chartScrollRef = useRef(null);
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 700 : false);
 
   const load = () => api('/api/admin/dashboard').then(setData);
   useEffect(() => { load(); }, [refreshToken]);
@@ -854,6 +866,14 @@ function Overview({ refreshToken }) {
       .then(setTopProducts)
       .catch(() => setTopProducts([]));
   }, [period]);
+
+  useEffect(() => {
+    function onResize() {
+      setIsMobile(window.innerWidth <= 700);
+    }
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // Build bar chart data from top-products or historical endpoint
   useEffect(() => {
@@ -881,6 +901,9 @@ function Overview({ refreshToken }) {
 
   const periodLabels = { day: 'Theo ngày', month: 'Theo tháng', year: 'Theo năm' };
   const chartLabels = { day: '10 ngày gần nhất', month: '10 tháng gần nhất', year: '10 năm gần nhất' };
+
+  const displayCount = isMobile ? 5 : 10;
+  const displayedBarData = barData && barData.length ? barData.slice(Math.max(0, barData.length - displayCount)) : barData;
 
   // Pie data: top 6 + "Khác"
   const top6 = topProducts.slice(0, 6);
@@ -933,9 +956,9 @@ function Overview({ refreshToken }) {
             <div className="ov-empty-chart">Không có dữ liệu</div>
           ) : (
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={barData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }} barCategoryGap="25%">
+              <BarChart data={displayedBarData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }} barCategoryGap="25%">
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 12, fill: 'var(--ink-3)' }} axisLine={false} tickLine={false} interval={0} />
+                <XAxis dataKey="label" tick={{ fontSize: 12, fill: 'var(--ink-3)', angle: isMobile ? -35 : 0, textAnchor: isMobile ? 'end' : 'middle' }} axisLine={false} tickLine={false} interval={0} />
                 <YAxis tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} tick={{ fontSize: 11, fill: 'var(--ink-3)' }} axisLine={false} tickLine={false} width={52} />
                 <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'rgba(37,99,235,0.06)', radius: 8 }} />
                 <Bar dataKey="revenue" name="Doanh thu" fill="url(#barGrad)" radius={[6, 6, 0, 0]} />
@@ -968,7 +991,7 @@ function Overview({ refreshToken }) {
             <div className="ov-empty-chart" style={{ padding: '32px 16px' }}>Không có dữ liệu</div>
           ) : (
             <div className="ov-ranking-list">
-              {topProducts.map((product, idx) => (
+              {topProducts.slice(0, isMobile ? 5 : 10).map((product, idx) => (
                 <div key={product.id} className={`ov-ranking-row ${idx < 3 ? 'top3' : ''}`}>
                   <div className="ov-rank-badge" style={{ background: PIE_COLORS[idx % PIE_COLORS.length] }}>
                     {idx + 1}
@@ -1306,6 +1329,7 @@ function MenuManager({ refreshToken }) {
   const [form, setForm]   = useState({ name: '', price: 0, description: '', imageUrl: '', categoryId: '' });
   const [editingId, setEditingId] = useState(null);
   const [editingForm, setEditingForm] = useState(null);
+  const [editUploadFilename, setEditUploadFilename] = useState(null);
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [categoryForm, setCategoryForm] = useState({ name: '', sortOrder: 0 });
   const [editingCategoryId, setEditingCategoryId] = useState(null);
@@ -1318,29 +1342,90 @@ function MenuManager({ refreshToken }) {
   useEffect(() => { loadMenu(); }, [refreshToken]);
   useRealtimeUpdates(['menu'], loadMenu);
 
-  function chooseImage(e) {
+  const [uploadFilename, setUploadFilename] = useState(null);
+
+  async function chooseImage(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setForm((c) => ({ ...c, imageUrl: reader.result }));
-    reader.readAsDataURL(file);
+
+    // If there's a previous temp upload, delete it first
+    try {
+      if (uploadFilename) {
+        const token = localStorage.getItem('vanmerchant_token');
+        await fetch(`${API_BASE}/api/admin/upload-menu-image/${uploadFilename}`, { method: 'DELETE', headers: { Authorization: token ? `Bearer ${token}` : '' } });
+        setUploadFilename(null);
+      }
+    } catch { /* ignore */ }
+
+    const formData = new FormData();
+    formData.append('image', file);
+    const token = localStorage.getItem('vanmerchant_token');
+    const res = await fetch(`${API_BASE}/api/admin/upload-menu-image`, { method: 'POST', body: formData, headers: { Authorization: token ? `Bearer ${token}` : '' } });
+    if (!res.ok) {
+      const txt = await res.text();
+      alert('Upload thất bại: ' + txt);
+      return;
+    }
+    const data = await res.json();
+    setForm((c) => ({ ...c, imageUrl: data.imageUrl }));
+    setUploadFilename(data.filename || null);
   }
 
   async function submit(e) {
     e.preventDefault();
     await api('/api/admin/menu-items', { method: 'POST', body: JSON.stringify({ ...form, price: Number(form.price), categoryId: form.categoryId || null }) });
     setForm({ name: '', price: 0, description: '', imageUrl: '', categoryId: '' });
+    // clear temp upload marker (server persists file since DB references it)
+    setUploadFilename(null);
     setShowAddForm(false);
     loadItems();
+  }
+
+  // If the user cancels the add form after uploading, remove the temp file
+  async function handleToggleAddForm() {
+    if (showAddForm && uploadFilename) {
+      try {
+        const token = localStorage.getItem('vanmerchant_token');
+        await fetch(`${API_BASE}/api/admin/upload-menu-image/${uploadFilename}`, { method: 'DELETE', headers: { Authorization: token ? `Bearer ${token}` : '' } });
+      } catch { /* ignore */ }
+      setUploadFilename(null);
+      setForm({ name: '', price: 0, description: '', imageUrl: '', categoryId: '' });
+    }
+    setShowAddForm((s) => !s);
   }
 
   function startEdit(item) {
     setEditingId(item.id);
     setEditingForm({ name: item.name, price: item.price, description: item.description || '', imageUrl: item.imageUrl || '', active: item.active !== false, categoryId: item.categoryId || '' });
+    setEditUploadFilename(null);
+  }
+
+  async function chooseEditImage(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      if (editUploadFilename) {
+        const token = localStorage.getItem('vanmerchant_token');
+        await fetch(`${API_BASE}/api/admin/upload-menu-image/${editUploadFilename}`, { method: 'DELETE', headers: { Authorization: token ? `Bearer ${token}` : '' } });
+        setEditUploadFilename(null);
+      }
+    } catch {}
+
+    const formData = new FormData();
+    formData.append('image', file);
+    const token = localStorage.getItem('vanmerchant_token');
+    const res = await fetch(`${API_BASE}/api/admin/upload-menu-image`, { method: 'POST', body: formData, headers: { Authorization: token ? `Bearer ${token}` : '' } });
+    if (!res.ok) { alert('Upload thất bại'); return; }
+    const data = await res.json();
+    setEditingForm((c) => ({ ...c, imageUrl: data.imageUrl }));
+    setEditUploadFilename(data.filename || null);
   }
 
   async function saveEdit(itemId) {
     await api(`/api/admin/menu-items/${itemId}`, { method: 'PUT', body: JSON.stringify({ ...editingForm, price: Number(editingForm.price), categoryId: editingForm.categoryId || null }) });
+    // clear temp upload marker for edit
+    setEditUploadFilename(null);
     setEditingId(null); setEditingForm(null); loadItems();
   }
 
@@ -1522,7 +1607,7 @@ function MenuManager({ refreshToken }) {
           </div>
         )}
       </div>
-      <button className="btn btn-primary" onClick={() => setShowAddForm(!showAddForm)} style={{ marginBottom: 16 }}><Plus size={16} /> {showAddForm ? 'Ẩn' : 'Thêm mới'}</button>
+      <button className="btn btn-primary" onClick={handleToggleAddForm} style={{ marginBottom: 16 }}><Plus size={16} /> {showAddForm ? 'Ẩn' : 'Thêm mới'}</button>
       {showAddForm && (
         <form className="menu-add-form" onSubmit={submit}>
           <label className="image-picker">
@@ -1553,13 +1638,21 @@ function MenuManager({ refreshToken }) {
                   <input className="field" value={editingForm.price} onChange={(e) => setEditingForm({ ...editingForm, price: e.target.value })} placeholder="Giá bán" type="number" />
                   <textarea className="field" value={editingForm.description} onChange={(e) => setEditingForm({ ...editingForm, description: e.target.value })} placeholder="Mô tả" />
                   <input className="field" value={editingForm.imageUrl} onChange={(e) => setEditingForm({ ...editingForm, imageUrl: e.target.value })} placeholder="URL ảnh" />
+                  <input type="file" accept="image/*" onChange={chooseEditImage} />
                   <select className="field" value={editingForm.categoryId} onChange={(e) => setEditingForm({ ...editingForm, categoryId: e.target.value })}>
                     <option value="">Chọn phân loại</option>
                     {categories.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
                   </select>
                   <div className="admin-card-actions">
                     <button className="btn btn-primary" type="button" onClick={() => saveEdit(item.id)}><Check size={14} /> Lưu</button>
-                    <button className="btn btn-ghost" type="button" onClick={() => { setEditingId(null); setEditingForm(null); }}>Hủy</button>
+                    <button className="btn btn-ghost" type="button" onClick={async () => { 
+                      // if a temp edit upload exists, delete it
+                      if (editUploadFilename) {
+                        try { const token = localStorage.getItem('vanmerchant_token'); await fetch(`${API_BASE}/api/admin/upload-menu-image/${editUploadFilename}`, { method: 'DELETE', headers: { Authorization: token ? `Bearer ${token}` : '' } }); } catch {}
+                        setEditUploadFilename(null);
+                      }
+                      setEditingId(null); setEditingForm(null); 
+                    }}>Hủy</button>
                   </div>
                 </div>
               ) : (

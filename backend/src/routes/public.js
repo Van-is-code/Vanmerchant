@@ -1,12 +1,40 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../db.js';
+import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
 import { calculateCart, createOrderFromCart, createPaidOrderFromIntent, businessDate } from '../services/order-service.js';
 import { createPayosLink, buildPayosIntentReferenceCode, getPayosPaymentInfo } from '../services/payos-service.js';
 import { printKitchenTicket } from '../services/print-service.js';
 import { broadcastDataChange } from '../services/realtime.js';
 
 const router = Router();
+
+router.get('/version', (req, res) => {
+  try {
+    // Try to read backend package.json version as base
+    let base = '1.0';
+    try {
+      const pkgPath = path.join(process.cwd(), 'package.json');
+      if (fs.existsSync(pkgPath)) {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+        if (pkg?.version) base = pkg.version;
+      }
+    } catch {}
+
+    // Append git commit count if available to provide incremental number
+    let gitCount = null;
+    try {
+      gitCount = execSync('git rev-list --count HEAD').toString().trim();
+    } catch {}
+
+    const version = gitCount ? `${base} - ${gitCount}` : base;
+    return res.json({ version });
+  } catch (err) {
+    return res.json({ version: '1.0' });
+  }
+});
 
 async function syncPaymentIntentFromPayos(intent) {
   if (!intent || intent.status !== 'PENDING' || !intent.payosOrderCode) {
@@ -41,6 +69,7 @@ async function syncPaymentIntentFromPayos(intent) {
   const transaction = Array.isArray(paymentInfo?.transactions) ? paymentInfo.transactions.at(-1) : null;
   const transactionId = String(transaction?.reference || paymentInfo?.id || intent.payosOrderCode || '').trim();
 
+  const wasLinked = Boolean(intent.orderId);
   const paid = await prisma.$transaction(async (tx) => {
     const freshIntent = await tx.paymentIntent.findUnique({ where: { id: intent.id } });
     if (!freshIntent) throw new Error('Khong tim thay payment intent');
@@ -72,6 +101,14 @@ async function syncPaymentIntentFromPayos(intent) {
     orderId: paid.order.id,
     referenceCode: paid.intent.referenceCode
   });
+  // If this sync created the order, also broadcast a 'created' event so clients show new-order notification
+  try {
+    if (!wasLinked) {
+      const itemCount = (paid.order.items || []).reduce((s, it) => s + (it.quantity || 0), 0);
+      broadcastDataChange('orders', { action: 'created', orderId: paid.order.id, dailySequence: paid.order.dailySequence, tableName: paid.order.table?.name || '', subtotal: paid.order.subtotal, itemCount });
+    }
+  } catch {}
+  // Still broadcast paid event for listeners interested in payment updates
   broadcastDataChange('orders', { action: 'paid', orderId: paid.order.id });
   broadcastDataChange('dashboard', { action: 'updated', source: 'payos-sync' });
 
