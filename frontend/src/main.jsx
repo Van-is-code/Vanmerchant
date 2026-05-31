@@ -827,7 +827,7 @@ function renderActiveShape(props) {
   return (
     <g>
       <text x={cx} y={cy - 14} textAnchor="middle" fill="var(--ink)" style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15 }}>{payload.name}</text>
-      <text x={cx} y={cy + 10} textAnchor="middle" fill="var(--ink-2)" style={{ fontSize: 13 }}>{money(value)}</text>
+      <text x={cx} y={cy + 10} textAnchor="middle" fill="var(--ink-2)" style={{ fontSize: 13 }}>{value} đơn vị</text>
       <text x={cx} y={cy + 28} textAnchor="middle" fill="var(--ink-3)" style={{ fontSize: 12 }}>{(percent * 100).toFixed(1)}%</text>
       <Sector cx={cx} cy={cy} innerRadius={innerRadius} outerRadius={outerRadius + 8} startAngle={startAngle} endAngle={endAngle} fill={fill} />
       <Sector cx={cx} cy={cy} innerRadius={innerRadius - 4} outerRadius={innerRadius - 2} startAngle={startAngle} endAngle={endAngle} fill={fill} />
@@ -907,12 +907,12 @@ function Overview({ refreshToken }) {
 
   // Pie data: top 6 + "Khác"
   const top6 = topProducts.slice(0, 6);
-  const othersRevenue = topProducts.slice(6).reduce((s, p) => s + (p.totalRevenue || 0), 0);
+  const othersCount = topProducts.slice(6).reduce((s, p) => s + (p.totalQuantity || 0), 0);
   const pieData = [
-    ...top6.map((p) => ({ name: p.name, value: p.totalRevenue || 0, qty: p.totalQuantity || 0 })),
-    ...(othersRevenue > 0 ? [{ name: 'Khác', value: othersRevenue, qty: 0 }] : []),
+    ...top6.map((p) => ({ name: p.name, value: p.totalQuantity || 0, revenue: p.totalRevenue || 0 })),
+    ...(othersCount > 0 ? [{ name: 'Khác', value: othersCount, revenue: 0 }] : []),
   ];
-  const totalPieRevenue = pieData.reduce((s, p) => s + p.value, 0);
+  const totalPieCount = pieData.reduce((s, p) => s + p.value, 0);
 
   return (
     <div className="ov-root">
@@ -1011,7 +1011,7 @@ function Overview({ refreshToken }) {
         <div className="ov-pie-card">
           <div className="ov-ranking-header">
             <ShoppingBasket size={16} />
-            <span>Doanh thu bán hàng</span>
+            <span>Số lượng bán hàng</span>
           </div>
           {pieData.length === 0 ? (
             <div className="ov-empty-chart" style={{ padding: '32px 16px' }}>Không có dữ liệu</div>
@@ -1039,19 +1039,22 @@ function Overview({ refreshToken }) {
               </ResponsiveContainer>
               {/* Legend */}
               <div className="ov-pie-legend">
-                {pieData.map((entry, index) => (
-                  <div
-                    key={index}
-                    className={`ov-legend-item ${activePieIndex === index ? 'active' : ''}`}
-                    onMouseEnter={() => setActivePieIndex(index)}
-                  >
-                    <div className="ov-legend-dot" style={{ background: PIE_COLORS[index % PIE_COLORS.length] }} />
-                    <div className="ov-legend-label">
-                      <span className="ov-legend-name">Top {index + 1}{index >= 6 ? '' : ''}{entry.name === 'Khác' ? ' (khác)' : ''}</span>
-                      <span className="ov-legend-pct">{totalPieRevenue > 0 ? ((entry.value / totalPieRevenue) * 100).toFixed(1) : 0}%</span>
+                {pieData.map((entry, index) => {
+                  const pct = totalPieCount > 0 ? ((entry.value / totalPieCount) * 100).toFixed(1) : 0;
+                  return (
+                    <div
+                      key={index}
+                      className={`ov-legend-item ${activePieIndex === index ? 'active' : ''}`}
+                      onMouseEnter={() => setActivePieIndex(index)}
+                    >
+                      <div className="ov-legend-dot" style={{ background: PIE_COLORS[index % PIE_COLORS.length] }} />
+                      <div className="ov-legend-label">
+                        <span className="ov-legend-name">Top {index + 1}{index >= 6 ? '' : ''}{entry.name === 'Khác' ? ' (khác)' : ''}</span>
+                        <span className="ov-legend-pct">{entry.value} đơn • {pct}%</span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
